@@ -192,6 +192,7 @@ share* process_instruction(
 			}
 			case DIV_: {
 				result = signeddivbl(circ, wire1, wire2);
+				// exit(0);
 				break;
 			} 
 			case EQ_: {
@@ -207,10 +208,10 @@ share* process_instruction(
 			case CONS_bv: {
 				int value = std::stoi(input_wires[0]);
 				if (circuit_type == "y") {
-					result = put_cons64_gate(bcirc, value);
+					result = put_cons32_gate(bcirc, value);
 					result = add_conv_gate("b", circuit_type, result, acirc, bcirc, ycirc);
 				} else {
-					result = put_cons64_gate(circ, value);
+					result = put_cons32_gate(circ, value);
 				}
 				break;
 			}
@@ -280,7 +281,6 @@ share* process_bytecode(
 	Circuit* circ;
 	while (std::getline(file, str)) {
         std::vector<std::string> line = split_(str, ' ');
-
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
 		int num_outputs = std::stoi(line[1]);
@@ -303,7 +303,7 @@ share* process_bytecode(
 			circuit_type = get(mapping, input_wires[0]);
 		}
 		last_instr = process_instruction(acirc, bcirc, ycirc, circuit_type, cache, mapping, input_wires, output_wires, op);
-
+	
 		for (auto o: output_wires) {
 			(*cache)[o] = last_instr;
 		}
@@ -369,7 +369,7 @@ int32_t test_aby_test_circuit(
 	process_input_params(cache, params, mapping, role, bitlen, acirc, bcirc, ycirc);
 
 	// process bytecode
-	share* out_share = process_bytecode(bytecode_path, cache, mapping, acirc, bcirc, ycirc);
+	share* out_share = process_bytecode(bytecode_path, cache, mapping, acirc, bcirc, ycirc);	
 
 	add_to_output_queue(out_q, out_share, role, std::cout);
 	party->ExecCircuit();
