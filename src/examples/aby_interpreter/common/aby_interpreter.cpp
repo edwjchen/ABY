@@ -5,6 +5,8 @@
 #include "../../../abycore/sharing/sharing.h"
 #include "ezpc.h"
 
+int PUBLIC = 2;
+
 enum op {
 	ADD_,
 	SUB_,
@@ -23,6 +25,7 @@ enum op {
 	MUX_, 
 	NOT_,
 	DIV_,
+	IN_,
 	OUT_,
 };
 
@@ -44,11 +47,12 @@ op op_hash(std::string o) {
 	if (o == "MUX") return MUX_;
 	if (o == "NOT") return NOT_;
 	if (o == "DIV") return DIV_;
+	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
     throw std::invalid_argument("Unknown operator: "+o);
 }
 
-bool is_bv_op(op o) {
+bool is_bin_op(op o) {
 	return o == ADD_ || o == SUB_ || o == MUL_ || o == EQ_ || o == GT_ || o == LT_ || o == GE_ || o == LE_ || o == REM_ || o == DIV_ || o == AND_ || o == OR_ || o == XOR_;
 }
 
@@ -62,27 +66,12 @@ std::vector<std::string> split_(std::string str, char delimiter) {
     return result;
 }
 
-share* get_from_cache(std::unordered_map<std::string, share*>* cache, std::string key) {	
-	std::unordered_map<std::string, share*>::const_iterator wire = cache->find(key);
-	if (wire == cache->end()){
-		throw std::invalid_argument("Unknown wire in cache: " + key);
-	}
-	else {
-		return wire->second;
-	}
-}
+Circuit* get_circuit(std::string circuit_type, ABYParty* party) {
+	std::vector<Sharing*>& sharings = party->GetSharings();
+	Circuit* acirc = sharings[S_ARITH]->GetCircuitBuildRoutine();
+	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
+	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 
-std::string get(std::unordered_map<std::string, std::string>* map, std::string key) {
-	std::unordered_map<std::string, std::string>::const_iterator m = map->find(key);
-	if (m == map->end()){
-		throw std::invalid_argument("Unknown wire: " + key);
-	}
-	else {
-		return m->second;
-	}
-}
-
-Circuit* get_circuit(Circuit* acirc, Circuit* bcirc, Circuit* ycirc, std::string circuit_type) {
 	Circuit* circ;
 	if (circuit_type == "a") {
 		circ = acirc;
@@ -100,9 +89,12 @@ share* add_conv_gate(
 	std::string from, 
 	std::string to, 
 	share* wire, 
-	Circuit* acirc,
-	Circuit* bcirc,
-	Circuit* ycirc) {
+	ABYParty* party) {
+	std::vector<Sharing*>& sharings = party->GetSharings();
+	Circuit* acirc = sharings[S_ARITH]->GetCircuitBuildRoutine();
+	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
+	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
+
 	if (from == "a" && to == "b") {
 		return bcirc->PutA2BGate(wire, ycirc);
 	} else if (from == "a" && to == "y") {
@@ -120,30 +112,56 @@ share* add_conv_gate(
 	}
 }
 
+// void process_input(
+// 	std::unordered_map<std::string, share*>* cache,
+// 	std::unordered_map<std::string, uint32_t>* params,
+// 	std::unordered_map<std::string, std::string>* share_map,
+// 	e_role role,
+// 	uint32_t bitlen,
+// 	ABYParty* party) {
+// 	for (auto p: *params) {
+// 		std::string param_name = p.first;
+// 		uint32_t param_value = (p.second);
+// 		std::string circuit_type = get(share_map, std::to_string(param_index));
+// 		Circuit* circ = get_circuit(circuit_type, party);
+// 		share* param_share;
+// 		if (param_role == role_str) {
+// 			param_share = circ->PutINGate(param_value, bitlen, role);
+// 		} else {
+// 			param_share = circ->PutDummyINGate(bitlen);
+// 		}
+// 		(*cache)[std::to_string(param_index)] = param_share;
+// 	}
+// }
+
+
 share* process_instruction(
-	Circuit* acirc, 
-	Circuit* bcirc, 
-	Circuit* ycirc, 
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
-	std::unordered_map<std::string, std::string>* mapping,
+	std::unordered_map<std::string, uint32_t>* params,
+	std::unordered_map<std::string, std::string>* share_map,
 	std::vector<std::string> input_wires, 
 	std::vector<std::string> output_wires, 
-	std::string op) {
+	std::string op,
+	e_role role, 
+	uint32_t bitlen,
+	ABYParty* party) {
+	std::vector<Sharing*>& sharings = party->GetSharings();
+	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
 
-	Circuit* circ = get_circuit(acirc, bcirc, ycirc, circuit_type);
+	Circuit* circ = get_circuit(circuit_type, party);
 	share* result;
 
-	if (is_bv_op(op_hash(op))) {
-		share* wire1 = get_from_cache(cache, input_wires[0]);
-		share* wire2 = get_from_cache(cache, input_wires[1]);
+	if (is_bin_op(op_hash(op))) {
+		share* wire1 = cache->at(input_wires[0]);
+		share* wire2 = cache->at(input_wires[1]);
 
 		// add conversion gates
-		std::string share_type_1 = get(mapping, input_wires[0]);
-		std::string share_type_2 = get(mapping, input_wires[1]);
+		std::string share_type_1 = share_map->at(input_wires[0]);
+		std::string share_type_2 = share_map->at(input_wires[1]);
 
-		wire1 = add_conv_gate(share_type_1, circuit_type, wire1, acirc, bcirc, ycirc);
-		wire2 = add_conv_gate(share_type_2, circuit_type, wire2, acirc, bcirc, ycirc);
+		wire1 = add_conv_gate(share_type_1, circuit_type, wire1, party);
+		wire2 = add_conv_gate(share_type_2, circuit_type, wire2, party);
 
 		switch(op_hash(op)) {
 			case ADD_: {
@@ -192,7 +210,6 @@ share* process_instruction(
 			}
 			case DIV_: {
 				result = signeddivbl(circ, wire1, wire2);
-				// exit(0);
 				break;
 			} 
 			case EQ_: {
@@ -209,7 +226,7 @@ share* process_instruction(
 				int value = std::stoi(input_wires[0]);
 				if (circuit_type == "y") {
 					result = put_cons32_gate(bcirc, value);
-					result = add_conv_gate("b", circuit_type, result, acirc, bcirc, ycirc);
+					result = add_conv_gate("b", circuit_type, result, party);
 				} else {
 					result = put_cons32_gate(circ, value);
 				}
@@ -219,41 +236,69 @@ share* process_instruction(
 				int value = std::stoi(input_wires[0]);
 				if (circuit_type == "y") {
 					result = put_cons1_gate(bcirc, value);
-					result = add_conv_gate("b", circuit_type, result, acirc, bcirc, ycirc);
+					result = add_conv_gate("b", circuit_type, result, party);
 				} else {
 					result = put_cons1_gate(circ, value);
 				}
 				break;
 			}
 			case MUX_: {
-				share* sel = get_from_cache(cache, input_wires[0]);
-				share* wire1 = get_from_cache(cache, input_wires[1]);
-				share* wire2 = get_from_cache(cache, input_wires[2]);
+				share* sel = cache->at(input_wires[0]);
+				share* wire1 = cache->at(input_wires[1]);
+				share* wire2 = cache->at(input_wires[2]);
 
 				// add conversion gates
-				std::string share_type_sel = get(mapping, input_wires[0]);
-				std::string share_type_1 = get(mapping, input_wires[1]);
-				std::string share_type_2 = get(mapping, input_wires[2]);
+				std::string share_type_sel = share_map->at(input_wires[0]);
+				std::string share_type_1 = share_map->at(input_wires[1]);
+				std::string share_type_2 = share_map->at(input_wires[2]);
 
-				sel = add_conv_gate(share_type_sel, circuit_type, sel, acirc, bcirc, ycirc);
-				wire1 = add_conv_gate(share_type_1, circuit_type, wire1, acirc, bcirc, ycirc);
-				wire2 = add_conv_gate(share_type_2, circuit_type, wire2, acirc, bcirc, ycirc);
+				sel = add_conv_gate(share_type_sel, circuit_type, sel, party);
+				wire1 = add_conv_gate(share_type_1, circuit_type, wire1, party);
+				wire2 = add_conv_gate(share_type_2, circuit_type, wire2, party);
 
 				result = circ->PutMUXGate(wire1, wire2, sel);
 				break;
 			}
 			case NOT_: {
-				share* wire = get_from_cache(cache, input_wires[0]);
+				share* wire = cache->at(input_wires[0]);
 
 				// add conversion gates
-				std::string share_type = get(mapping, input_wires[0]);
-				wire = add_conv_gate(share_type, circuit_type, wire, acirc, bcirc, ycirc);
+				std::string share_type = share_map->at(input_wires[0]);
+				wire = add_conv_gate(share_type, circuit_type, wire, party);
 				
 				result = ((BooleanCircuit *)circ)->PutINVGate(wire);
 				break;
 			}
+			case IN_: {
+				std::string var_name = input_wires[0];
+				uint32_t value = params->at(var_name);
+				int vis = std::stoi(input_wires[1]);
+				if (vis == (int) role) {
+					result = circ->PutINGate(value, bitlen, role);
+				} else if (vis == PUBLIC) {
+					int len = std::stoi(input_wires[2]);
+					if (len == 1) {
+						if (circuit_type == "y") {
+							result = put_cons1_gate(bcirc, value);
+							result = add_conv_gate("b", circuit_type, result, party);
+						} else {
+							result = put_cons1_gate(circ, value);
+						}
+					} else {
+						if (circuit_type == "y") {
+							result = put_cons32_gate(bcirc, value);
+							result = add_conv_gate("b", circuit_type, result, party);
+						} else {
+							result = put_cons32_gate(circ, value);
+						}
+					}
+				} else {
+					result = circ->PutDummyINGate(bitlen);
+				} 
+				break;
+			}
 			case OUT_: {
-				share* wire = get_from_cache(cache, input_wires[0]);
+				share* wire = cache->at(input_wires[0]);
 				result = circ->PutOUTGate(wire, ALL);
 				break;
 			}
@@ -269,10 +314,11 @@ share* process_instruction(
 share* process_bytecode(
 	std::string bytecode_path,
 	std::unordered_map<std::string, share*>* cache,
-	std::unordered_map<std::string, std::string>* mapping,
-	Circuit* acirc, 
-	Circuit* bcirc, 
-	Circuit* ycirc) {
+	std::unordered_map<std::string, uint32_t>* params,
+	std::unordered_map<std::string, std::string>* share_map,
+	e_role role,
+	uint32_t bitlen,
+	ABYParty* party) {
 	std::ifstream file(bytecode_path);
 	assert(("Bytecode file exists.", file.is_open()));
 	if (!file.is_open()) throw std::runtime_error("Bytecode file doesn't exist -- "+bytecode_path);
@@ -296,13 +342,12 @@ share* process_bytecode(
 
 		std::string op = line[2+num_inputs+num_outputs];
 		std::string circuit_type;
-
 		if (num_outputs) {
-			circuit_type = get(mapping, output_wires[0]);
+			circuit_type = share_map->at(output_wires[0]);
 		} else {
-			circuit_type = get(mapping, input_wires[0]);
+			circuit_type = share_map->at(input_wires[0]);
 		}
-		last_instr = process_instruction(acirc, bcirc, ycirc, circuit_type, cache, mapping, input_wires, output_wires, op);
+		last_instr = process_instruction(circuit_type, cache, params, share_map, input_wires, output_wires, op, role, bitlen, party);
 	
 		for (auto o: output_wires) {
 			(*cache)[o] = last_instr;
@@ -312,39 +357,10 @@ share* process_bytecode(
 	return last_instr;
 }
 
-void process_input_params(
-	std::unordered_map<std::string, share*>* cache,
-	std::unordered_map<std::string, std::tuple<std::string, uint32_t, uint32_t>>* params,
-	std::unordered_map<std::string, std::string>* mapping,
-	e_role role,
-	uint32_t bitlen,
-	Circuit* acirc, 
-	Circuit* bcirc, 
-	Circuit* ycirc) {
-	std::string role_str = (role == 0) ? "server" : "client";
-	for (auto p: *params) {
-		std::string param_name = p.first;
-		std::string param_role = std::get<0>(p.second);
-		uint32_t param_value = std::get<1>(p.second);
-		uint32_t param_index = std::get<2>(p.second);
-		if (param_index == (uint32_t)-1) continue;		
-		std::string circuit_type = get(mapping, std::to_string(param_index));
-		Circuit* circ = get_circuit(acirc, bcirc, ycirc, circuit_type);
-		share* param_share;
-		if (param_role == role_str) {
-			param_share = circ->PutINGate(param_value, bitlen, role);
-		} else {
-			param_share = circ->PutDummyINGate(bitlen);
-		}
-		(*cache)[std::to_string(param_index)] = param_share;
-	}
-}
-
-
 int32_t test_aby_test_circuit(
 	std::string bytecode_path, 
-	std::unordered_map<std::string, std::tuple<std::string, uint32_t, uint32_t>>* params, 
-	std::unordered_map<std::string, std::string>* mapping,
+	std::unordered_map<std::string, uint32_t>* params, 
+	std::unordered_map<std::string, std::string>* share_map,
 	e_role role, 
 	const std::string& address, 
 	uint16_t port, 
@@ -356,20 +372,13 @@ int32_t test_aby_test_circuit(
 
 	// setup
 	ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg);
-	std::vector<Sharing*>& sharings = party->GetSharings();
-	Circuit* acirc = sharings[S_ARITH]->GetCircuitBuildRoutine();
-	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
-	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 	output_queue out_q;
 
 	// share cache
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
 
-	// process input params
-	process_input_params(cache, params, mapping, role, bitlen, acirc, bcirc, ycirc);
-
 	// process bytecode
-	share* out_share = process_bytecode(bytecode_path, cache, mapping, acirc, bcirc, ycirc);	
+	share* out_share = process_bytecode(bytecode_path, cache, params, share_map, role, bitlen, party);	
 
 	add_to_output_queue(out_q, out_share, role, std::cout);
 	party->ExecCircuit();
