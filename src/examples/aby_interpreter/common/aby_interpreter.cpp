@@ -5,6 +5,8 @@
 #include "../../../abycore/sharing/sharing.h"
 #include "ezpc.h"
 
+using namespace std::chrono;
+
 int PUBLIC = 2;
 
 enum op {
@@ -381,7 +383,14 @@ int32_t test_aby_test_circuit(
 	share* out_share = process_bytecode(bytecode_path, cache, params, share_map, role, bitlen, party);	
 
 	add_to_output_queue(out_q, out_share, role, std::cout);
+
+	// add timing code
+	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
+	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
+	duration<double> exec_time = duration_cast<duration<double>>(end_exec_time - start_exec_time);
+	std::cout << "LOG: " << "Exec time: " << exec_time.count() << std::endl;
+
 	flush_output_queue(out_q, role, bitlen);
 	delete cache;
 	delete party;
