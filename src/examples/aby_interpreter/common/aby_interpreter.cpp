@@ -389,7 +389,7 @@ int32_t test_aby_test_circuit(
 	party->ExecCircuit();
 	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
 	duration<double> exec_time = duration_cast<duration<double>>(end_exec_time - start_exec_time);
-	std::cout << "LOG: " << "Exec time: " << exec_time.count() << std::endl;
+	std::cout << "LOG: " << (role == SERVER ? "Server exec time: " : "Client exec time: ") << exec_time.count() << std::endl;
 
 	flush_output_queue(out_q, role, bitlen);
 	delete cache;

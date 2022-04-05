@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
     // add timing code
     high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
 	duration<double> exec_time = duration_cast<duration<double>>(end_exec_time - start_exec_time);
-	std::cout << "LOG: " << "Total time: " << exec_time.count() << std::endl;
+	std::cout << "LOG: " << (role == SERVER ? "Server total time: " : "Client total time: ") << exec_time.count() << std::endl;
 
 	return 0;
 }
