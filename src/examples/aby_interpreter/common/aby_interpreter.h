@@ -16,7 +16,7 @@
 #include <ratio>
 #include <chrono>
 
-int32_t test_aby_test_circuit(
+double test_aby_test_circuit(
 	std::string bytecode_file_path, 
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
