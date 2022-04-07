@@ -359,7 +359,7 @@ share* process_bytecode(
 	return last_instr;
 }
 
-int32_t test_aby_test_circuit(
+double test_aby_test_circuit(
 	std::string bytecode_path, 
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
@@ -394,5 +394,5 @@ int32_t test_aby_test_circuit(
 	flush_output_queue(out_q, role, bitlen);
 	delete cache;
 	delete party;
-	return 0;
+	return exec_time.count();
 }
