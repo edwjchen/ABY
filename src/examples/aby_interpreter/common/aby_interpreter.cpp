@@ -118,29 +118,6 @@ share* add_conv_gate(
 	}
 }
 
-// void process_input(
-// 	std::unordered_map<std::string, share*>* cache,
-// 	std::unordered_map<std::string, uint32_t>* params,
-// 	std::unordered_map<std::string, std::string>* share_map,
-// 	e_role role,
-// 	uint32_t bitlen,
-// 	ABYParty* party) {
-// 	for (auto p: *params) {
-// 		std::string param_name = p.first;
-// 		uint32_t param_value = (p.second);
-// 		std::string circuit_type = get(share_map, std::to_string(param_index));
-// 		Circuit* circ = get_circuit(circuit_type, party);
-// 		share* param_share;
-// 		if (param_role == role_str) {
-// 			param_share = circ->PutINGate(param_value, bitlen, role);
-// 		} else {
-// 			param_share = circ->PutDummyINGate(bitlen);
-// 		}
-// 		(*cache)[std::to_string(param_index)] = param_share;
-// 	}
-// }
-
-
 share* process_instruction(
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
