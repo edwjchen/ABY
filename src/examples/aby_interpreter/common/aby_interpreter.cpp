@@ -26,6 +26,8 @@ enum op {
 	CONS_bool,
 	MUX_, 
 	NOT_,
+	SHL_,
+	LSHR_,
 	DIV_,
 	IN_,
 	OUT_,
@@ -49,6 +51,8 @@ op op_hash(std::string o) {
 	if (o == "MUX") return MUX_;
 	if (o == "NOT") return NOT_;
 	if (o == "DIV") return DIV_;
+	if (o == "SHL") return SHL_;
+	if (o == "LSHR") return LSHR_;
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
     throw std::invalid_argument("Unknown operator: "+o);
@@ -271,6 +275,18 @@ share* process_instruction(
 				result = ((BooleanCircuit *)circ)->PutINVGate(wire);
 				break;
 			}
+			case SHL_: {
+				share* wire = cache->at(input_wires[0]);
+				int value = std::stoi(input_wires[1]);
+				result = left_shift(circ, wire, value);
+				break;
+			} 
+			case LSHR_: {
+				share* wire = cache->at(input_wires[0]);
+				int value = std::stoi(input_wires[1]);
+				result = logical_right_shift(circ, wire, value);
+				break;
+			} 
 			case IN_: {
 				std::string var_name = input_wires[0];
 				uint32_t value = params->at(var_name);
