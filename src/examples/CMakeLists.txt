@@ -12,5 +12,6 @@ add_subdirectory(psi_scs)
 add_subdirectory(sha1)
 add_subdirectory(threshold_euclidean_dist_2d_simd)
 add_subdirectory(uc_circuit)
+add_subdirectory(simd)
 add_subdirectory(aby_interpreter)
 
