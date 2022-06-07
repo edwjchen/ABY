@@ -296,8 +296,10 @@ share* process_instruction(
 
 				// rewire 
 				if (rewire->size() > 0) {
+					std::cout << "in: " << output_wires[0] << " to " << rewire->at(0) << std::endl;
+					std::cout << "in output wire: " << output_wires[0] << std::endl;
 					share* rewire_share = cache->at(rewire->at(0));
-					cache->insert(std::pair<std::string, share*>(var_name, cache->at(rewire->at(0))));
+					cache->insert(std::pair<std::string, share*>(output_wires[0], cache->at(rewire->at(0))));
 					rewire->pop_front();
 					result = rewire_share;
 				} else {
@@ -331,6 +333,7 @@ share* process_instruction(
 			case OUT_: {
 				// rewire 
 				if (rewire->size() > 0) {
+					std::cout << "out: " << rewire->at(0) << " to " << input_wires[0] << std::endl;
 					share* rewire_share = cache->at(input_wires[0]);
 					cache->insert(std::pair<std::string, share*>(rewire->at(0), rewire_share));
 					rewire->pop_front();
@@ -373,6 +376,7 @@ std::vector<share*> process_bytecode(
 
 	std::vector<share*> out;
 	while (std::getline(file, str)) {
+		std::cout << str << std::endl;
         std::vector<std::string> line = split_(str);
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
@@ -403,7 +407,10 @@ std::vector<share*> process_bytecode(
 			std::deque<std::string> fn_rewire;
 			fn_rewire.insert(fn_rewire.end(), input_wires.begin(), input_wires.end());
 			fn_rewire.insert(fn_rewire.end(), output_wires.begin(), output_wires.end());
-			params->clear();
+
+			for (auto r: fn_rewire) {
+				std::cout << "rewire: " << r << std::endl;
+			}
 
 			// recursively call process bytecode on function body
 			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, fn_rewire, params, share_map, role, bitlen, party);	
@@ -453,10 +460,10 @@ double test_aby_test_circuit(
 
 	// multiple outputs
 	for (auto s: out_shares) {
-		std::cout << "out" << std::endl;
+		std::cout << "adding to out" << std::endl;
 		add_to_output_queue(out_q, s, role, std::cout);
 	}
-
+	
 	// add timing code
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
