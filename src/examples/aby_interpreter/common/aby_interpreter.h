@@ -17,7 +17,7 @@
 #include <chrono>
 
 double test_aby_test_circuit(
-	std::string bytecode_file_path, 
+	std::unordered_map<std::string, std::string>* bytecode_paths, 
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role, const std::string& address, 

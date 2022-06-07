@@ -5,6 +5,9 @@
 #include "../../../abycore/sharing/sharing.h"
 #include "ezpc.h"
 
+#include <regex>
+#include <deque>
+
 using namespace std::chrono;
 
 int PUBLIC = 2;
@@ -31,7 +34,15 @@ enum op {
 	DIV_,
 	IN_,
 	OUT_,
+	CALL_,
 };
+
+bool parse_call_op(std::string op) {
+	if (op.find("CALL") != std::string::npos) {
+		return true;
+	}
+	return false;
+}
 
 op op_hash(std::string o) {
     if (o == "ADD") return ADD_;
@@ -55,6 +66,7 @@ op op_hash(std::string o) {
 	if (o == "LSHR") return LSHR_;
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
+	if (parse_call_op(o)) return CALL_;
     throw std::invalid_argument("Unknown operator: "+o);
 }
 
@@ -62,7 +74,21 @@ bool is_bin_op(op o) {
 	return o == ADD_ || o == SUB_ || o == MUL_ || o == EQ_ || o == GT_ || o == LT_ || o == GE_ || o == LE_ || o == REM_ || o == DIV_ || o == AND_ || o == OR_ || o == XOR_;
 }
 
-std::vector<std::string> split_(std::string str, char delimiter) {
+std::string parse_fn_name(std::string op) {
+	assert(("Op is call op", op_hash(op) == CALL_));
+	
+	std::regex rex("\\((.*)\\)");
+    std::smatch m;
+    if (regex_search(op, m, rex)) {
+       return m[1];
+	} else {
+		throw std::invalid_argument("Unable to parse function name out of Call op: "+op);
+	}
+
+}
+
+
+std::vector<std::string> split_(std::string str) {
     std::vector<std::string> result;
     std::istringstream ss(str);
     std::string word; 
@@ -121,6 +147,7 @@ share* add_conv_gate(
 share* process_instruction(
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
+	std::deque<std::string>* rewire,
 	std::unordered_map<std::string, uint32_t>* params,
 	std::unordered_map<std::string, std::string>* share_map,
 	std::vector<std::string> input_wires, 
@@ -135,7 +162,7 @@ share* process_instruction(
 	Circuit* circ = get_circuit(circuit_type, party);
 	share* result;
 
-	if (is_bin_op(op_hash(op))) {
+	if (is_bin_op(op_hash(op))) {		
 		share* wire1 = cache->at(input_wires[0]);
 		share* wire2 = cache->at(input_wires[1]);
 
@@ -266,35 +293,52 @@ share* process_instruction(
 			} 
 			case IN_: {
 				std::string var_name = input_wires[0];
-				uint32_t value = params->at(var_name);
-				int vis = std::stoi(input_wires[1]);
-				if (vis == (int) role) {
-					result = circ->PutINGate(value, bitlen, role);
-				} else if (vis == PUBLIC) {
-					int len = std::stoi(input_wires[2]);
-					if (len == 1) {
-						if (circuit_type == "y") {
-							result = put_cons1_gate(bcirc, value);
-							result = add_conv_gate("b", circuit_type, result, party);
+
+				// rewire 
+				if (rewire->size() > 0) {
+					share* rewire_share = cache->at(rewire->at(0));
+					cache->insert(std::pair<std::string, share*>(var_name, cache->at(rewire->at(0))));
+					rewire->pop_front();
+					result = rewire_share;
+				} else {
+					uint32_t value = params->at(var_name);
+					int vis = std::stoi(input_wires[1]);
+					if (vis == (int) role) {
+						result = circ->PutINGate(value, bitlen, role);
+					} else if (vis == PUBLIC) {
+						int len = std::stoi(input_wires[2]);
+						if (len == 1) {
+							if (circuit_type == "y") {
+								result = put_cons1_gate(bcirc, value);
+								result = add_conv_gate("b", circuit_type, result, party);
+							} else {
+								result = put_cons1_gate(circ, value);
+							}
 						} else {
-							result = put_cons1_gate(circ, value);
+							if (circuit_type == "y") {
+								result = put_cons32_gate(bcirc, value);
+								result = add_conv_gate("b", circuit_type, result, party);
+							} else {
+								result = put_cons32_gate(circ, value);
+							}
 						}
 					} else {
-						if (circuit_type == "y") {
-							result = put_cons32_gate(bcirc, value);
-							result = add_conv_gate("b", circuit_type, result, party);
-						} else {
-							result = put_cons32_gate(circ, value);
-						}
-					}
-				} else {
-					result = circ->PutDummyINGate(bitlen);
-				} 
+						result = circ->PutDummyINGate(bitlen);
+					} 
+				}
 				break;
 			}
 			case OUT_: {
-				share* wire = cache->at(input_wires[0]);
-				result = circ->PutOUTGate(wire, ALL);
+				// rewire 
+				if (rewire->size() > 0) {
+					share* rewire_share = cache->at(input_wires[0]);
+					cache->insert(std::pair<std::string, share*>(rewire->at(0), rewire_share));
+					rewire->pop_front();
+					result = rewire_share;
+				} else {
+					share* wire = cache->at(input_wires[0]);
+					result = circ->PutOUTGate(wire, ALL);
+				}
 				break;
 			}
 			default: {
@@ -306,22 +350,30 @@ share* process_instruction(
 	return result;
 }
 
-share* process_bytecode(
-	std::string bytecode_path,
+
+std::vector<share*> process_bytecode(
+	std::string fn, 
+	std::unordered_map<std::string, std::string>* bytecode_paths,
 	std::unordered_map<std::string, share*>* cache,
+	std::deque<std::string> rewire,
 	std::unordered_map<std::string, uint32_t>* params,
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role,
 	uint32_t bitlen,
 	ABYParty* party) {
-	std::ifstream file(bytecode_path);
+
+	auto path = bytecode_paths->at(fn);
+
+	std::ifstream file(path);
 	assert(("Bytecode file exists.", file.is_open()));
-	if (!file.is_open()) throw std::runtime_error("Bytecode file doesn't exist -- "+bytecode_path);
+	if (!file.is_open()) throw std::runtime_error("Bytecode file doesn't exist -- "+path);
 	std::string str;
 	share* last_instr;
 	Circuit* circ;
+
+	std::vector<share*> out;
 	while (std::getline(file, str)) {
-        std::vector<std::string> line = split_(str, ' ');
+        std::vector<std::string> line = split_(str);
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
 		int num_outputs = std::stoi(line[1]);
@@ -342,18 +394,42 @@ share* process_bytecode(
 		} else {
 			circuit_type = share_map->at(input_wires[0]);
 		}
-		last_instr = process_instruction(circuit_type, cache, params, share_map, input_wires, output_wires, op, role, bitlen, party);
-	
-		for (auto o: output_wires) {
-			(*cache)[o] = last_instr;
+
+		if (parse_call_op(op)) {
+			auto fn =  parse_fn_name(op);
+
+			// input and output wires are concatenated into a vector and then used for 
+			// rewiring the input and output wires of the function
+			std::deque<std::string> fn_rewire;
+			fn_rewire.insert(fn_rewire.end(), input_wires.begin(), input_wires.end());
+			fn_rewire.insert(fn_rewire.end(), output_wires.begin(), output_wires.end());
+			params->clear();
+
+			// recursively call process bytecode on function body
+			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, fn_rewire, params, share_map, role, bitlen, party);	
+
+			assert(("Out_shares and output_wires are the same size", out_shares.size() == output_wires.size()));
+			for (int i = 0; i < out_shares.size(); i++) {
+				(*cache)[output_wires[i]] = out_shares[i];
+			}
+		} else {
+			last_instr = process_instruction(circuit_type, cache, &rewire, params, share_map, input_wires, output_wires, op, role, bitlen, party);
+			assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
+			for (auto o: output_wires) {
+				(*cache)[o] = last_instr;
+			}
 		}
+
+		if (op_hash(op) == OUT_) {
+			out.push_back(last_instr);
+		} 
 	}
-	if (last_instr == NULL) throw std::runtime_error("Return value is null.");
-	return last_instr;
+
+	return out;
 }
 
 double test_aby_test_circuit(
-	std::string bytecode_path, 
+	std::unordered_map<std::string, std::string>* bytecode_paths, 
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role, 
@@ -373,9 +449,13 @@ double test_aby_test_circuit(
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
 
 	// process bytecode
-	share* out_share = process_bytecode(bytecode_path, cache, params, share_map, role, bitlen, party);	
+	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, {}, params, share_map, role, bitlen, party);	
 
-	add_to_output_queue(out_q, out_share, role, std::cout);
+	// multiple outputs
+	for (auto s: out_shares) {
+		std::cout << "out" << std::endl;
+		add_to_output_queue(out_q, s, role, std::cout);
+	}
 
 	// add timing code
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
