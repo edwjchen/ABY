@@ -18,6 +18,7 @@
 
 double test_aby_test_circuit(
 	std::unordered_map<std::string, std::string>* bytecode_paths, 
+	std::string const_path,
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role, const std::string& address, 

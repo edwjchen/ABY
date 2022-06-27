@@ -29,7 +29,9 @@ std::vector<std::string> split(std::string str, std::string delimiter) {
     while ((pos_end = str.find (delimiter, pos_start)) != std::string::npos) {
         token = str.substr (pos_start, pos_end - pos_start);
         pos_start = pos_end + delim_len;
-        res.push_back(token);
+        if (token.length() > 0) {
+            res.push_back(token);
+        }
     }
     
     token = str.substr(pos_start);
@@ -39,11 +41,11 @@ std::vector<std::string> split(std::string str, std::string delimiter) {
     return res;
 }
 
-std::string get_share_map_path(std::string path) {
+std::string get_path(std::string path, std::string suffix) {
     auto path_list = split(path, "/");
     auto filename = path_list[path_list.size() - 1];
-    auto share_map_path = path + "/" + filename +  "_share_map.txt";
-    return share_map_path;
+    path = path + "/" + filename + suffix;
+    return path;
 }
 
 std::unordered_map<std::string, std::string> get_bytecode_paths(std::string path) {
@@ -143,7 +145,8 @@ int main(int argc, char** argv) {
     std::unordered_map<std::string, std::string> share_map;
     std::unordered_map<std::string, std::string> bytecode_paths;
 
-    auto share_map_path = get_share_map_path(path);
+    auto share_map_path = get_path(path, "_share_map.txt");
+    auto const_path = get_path(path, "_const.txt");
 
 	switch(hash_mode(m)) {
         case mpc: {
@@ -155,7 +158,7 @@ int main(int argc, char** argv) {
 
     bytecode_paths = get_bytecode_paths(path);
 
-	double exec_time = test_aby_test_circuit(&bytecode_paths, &params, &share_map, role, address, port, seclvl, 32,
+	double exec_time = test_aby_test_circuit(&bytecode_paths, const_path, &params, &share_map, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
 
     // add timing code

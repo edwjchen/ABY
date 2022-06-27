@@ -147,7 +147,8 @@ share* add_conv_gate(
 share* process_instruction(
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
-	std::deque<std::string>* rewire,
+	std::deque<std::string>* rewire_inputs,
+	std::deque<std::string>* rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
 	std::unordered_map<std::string, std::string>* share_map,
 	std::vector<std::string> input_wires, 
@@ -293,14 +294,15 @@ share* process_instruction(
 			} 
 			case IN_: {
 				std::string var_name = input_wires[0];
-
 				// rewire 
-				if (rewire->size() > 0) {
-					std::cout << "in: " << output_wires[0] << " to " << rewire->at(0) << std::endl;
-					std::cout << "in output wire: " << output_wires[0] << std::endl;
-					share* rewire_share = cache->at(rewire->at(0));
-					cache->insert(std::pair<std::string, share*>(output_wires[0], cache->at(rewire->at(0))));
-					rewire->pop_front();
+				if (rewire_inputs->size() > 0) {
+					// add conversion gates
+					std::string share_type_from = share_map->at(rewire_inputs->at(0));
+					std::string share_type_to = share_map->at(output_wires[0]);
+					share* rewire_share = cache->at(rewire_inputs->at(0));
+					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
+					cache->insert(std::pair<std::string, share*>(output_wires[0], rewire_share));
+					rewire_inputs->pop_front();
 					result = rewire_share;
 				} else {
 					uint32_t value = params->at(var_name);
@@ -332,11 +334,14 @@ share* process_instruction(
 			}
 			case OUT_: {
 				// rewire 
-				if (rewire->size() > 0) {
-					std::cout << "out: " << rewire->at(0) << " to " << input_wires[0] << std::endl;
-					share* rewire_share = cache->at(input_wires[0]);
-					cache->insert(std::pair<std::string, share*>(rewire->at(0), rewire_share));
-					rewire->pop_front();
+				if (rewire_outputs->size() > 0) {
+					// add conversion gates
+					std::string share_type_from = share_map->at(input_wires[0]);
+					std::string share_type_to = share_map->at(rewire_outputs->at(0));
+					share* rewire_share = cache->at(input_wires[0]);					
+					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
+					cache->insert(std::pair<std::string, share*>(rewire_outputs->at(0), rewire_share));
+					rewire_outputs->pop_front();
 					result = rewire_share;
 				} else {
 					share* wire = cache->at(input_wires[0]);
@@ -358,12 +363,14 @@ std::vector<share*> process_bytecode(
 	std::string fn, 
 	std::unordered_map<std::string, std::string>* bytecode_paths,
 	std::unordered_map<std::string, share*>* cache,
-	std::deque<std::string> rewire,
+	std::deque<std::string> rewire_inputs,
+	std::deque<std::string> rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role,
 	uint32_t bitlen,
 	ABYParty* party) {
+	std::cout << "LOG: processing function: " << fn << std::endl;
 
 	auto path = bytecode_paths->at(fn);
 
@@ -376,7 +383,6 @@ std::vector<share*> process_bytecode(
 
 	std::vector<share*> out;
 	while (std::getline(file, str)) {
-		std::cout << str << std::endl;
         std::vector<std::string> line = split_(str);
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
@@ -404,24 +410,22 @@ std::vector<share*> process_bytecode(
 
 			// input and output wires are concatenated into a vector and then used for 
 			// rewiring the input and output wires of the function
-			std::deque<std::string> fn_rewire;
-			fn_rewire.insert(fn_rewire.end(), input_wires.begin(), input_wires.end());
-			fn_rewire.insert(fn_rewire.end(), output_wires.begin(), output_wires.end());
-
-			for (auto r: fn_rewire) {
-				std::cout << "rewire: " << r << std::endl;
-			}
-
+			std::deque<std::string> rewire_inputs;
+			std::deque<std::string> rewire_outputs;
+			rewire_inputs.insert(rewire_inputs.end(), input_wires.begin(), input_wires.end());
+			rewire_outputs.insert(rewire_outputs.end(), output_wires.begin(), output_wires.end());
+			
 			// recursively call process bytecode on function body
-			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, fn_rewire, params, share_map, role, bitlen, party);	
+			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, rewire_inputs, rewire_outputs, params, share_map, role, bitlen, party);	
 
 			assert(("Out_shares and output_wires are the same size", out_shares.size() == output_wires.size()));
 			for (int i = 0; i < out_shares.size(); i++) {
 				(*cache)[output_wires[i]] = out_shares[i];
 			}
 		} else {
-			last_instr = process_instruction(circuit_type, cache, &rewire, params, share_map, input_wires, output_wires, op, role, bitlen, party);
+			last_instr = process_instruction(circuit_type, cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, op, role, bitlen, party);
 			assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
+
 			for (auto o: output_wires) {
 				(*cache)[o] = last_instr;
 			}
@@ -435,8 +439,59 @@ std::vector<share*> process_bytecode(
 	return out;
 }
 
+void process_const(
+	std::unordered_map<std::string, share*>* cache,
+	std::string const_path, 
+	std::unordered_map<std::string, std::string>* share_map,
+	e_role role,
+	uint32_t bitlen,
+	ABYParty* party) {
+	std::cout << "LOG: processing const" << std::endl;
+
+	std::ifstream file(const_path);
+	if (!file.is_open()) {
+		return;
+	}
+
+	share* last_instr;
+	Circuit* circ;
+
+	std::string str;
+	std::vector<share*> out;
+	while (std::getline(file, str)) {
+        std::vector<std::string> line = split_(str);
+		if (line.size() < 4) continue;
+		int num_inputs = std::stoi(line[0]);
+		int num_outputs = std::stoi(line[1]);
+		std::vector<std::string> input_wires = std::vector<std::string>(num_inputs);
+		std::vector<std::string> output_wires = std::vector<std::string>(num_outputs);
+
+		for (int i = 0; i < num_inputs; i++) {
+			input_wires[i] = line[2+i];
+		}
+		for (int i = 0; i < num_outputs; i++) {
+			output_wires[i] = line[2+num_inputs+i];
+		}
+
+		std::string op = line[2+num_inputs+num_outputs];
+		std::string circuit_type;
+		if (num_outputs) {
+			circuit_type = share_map->at(output_wires[0]);
+		} else {
+			circuit_type = share_map->at(input_wires[0]);
+		}
+
+		last_instr = process_instruction(circuit_type, cache, {}, {}, {}, share_map, input_wires, output_wires, op, role, bitlen, party);
+		assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
+		for (auto o: output_wires) {
+			(*cache)[o] = last_instr;
+		}
+	}
+}
+
 double test_aby_test_circuit(
 	std::unordered_map<std::string, std::string>* bytecode_paths, 
+	std::string const_path,
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role, 
@@ -455,12 +510,14 @@ double test_aby_test_circuit(
 	// share cache
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
 
+	// process consts 
+	process_const(cache, const_path, share_map, role, bitlen, party);
+
 	// process bytecode
-	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, {}, params, share_map, role, bitlen, party);	
+	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, {}, {}, params, share_map, role, bitlen, party);	
 
 	// multiple outputs
 	for (auto s: out_shares) {
-		std::cout << "adding to out" << std::endl;
 		add_to_output_queue(out_q, s, role, std::cout);
 	}
 	
