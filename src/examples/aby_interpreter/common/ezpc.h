@@ -339,9 +339,9 @@ void flush_output_queue(output_queue &q, e_role role, uint32_t bitlen)
     if (it->kind == output_queue_elmt::PrintValue) {
       if(it->role == ALL || it->role == role) {  //if the queue element role is same as mine
         if(bitlen == 32) {  //output to the stream
-          it->os << it->ptr->get_clear_value<uint32_t>() << endl;
+          it->os << it->ptr->get_clear_value<int32_t>() << endl;
         } else {
-          it->os << it->ptr->get_clear_value<uint64_t>() << endl;
+          it->os << it->ptr->get_clear_value<int64_t>() << endl;
         }
       }
     } else {

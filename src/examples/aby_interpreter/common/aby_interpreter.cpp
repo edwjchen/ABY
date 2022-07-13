@@ -87,7 +87,6 @@ std::string parse_fn_name(std::string op) {
 
 }
 
-
 std::vector<std::string> split_(std::string str) {
     std::vector<std::string> result;
     std::istringstream ss(str);
@@ -294,6 +293,7 @@ share* process_instruction(
 			} 
 			case IN_: {
 				std::string var_name = input_wires[0];
+			
 				// rewire 
 				if (rewire_inputs->size() > 0) {
 					// add conversion gates
@@ -301,6 +301,7 @@ share* process_instruction(
 					std::string share_type_to = share_map->at(output_wires[0]);
 					share* rewire_share = cache->at(rewire_inputs->at(0));
 					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
+
 					cache->insert(std::pair<std::string, share*>(output_wires[0], rewire_share));
 					rewire_inputs->pop_front();
 					result = rewire_share;
@@ -308,7 +309,12 @@ share* process_instruction(
 					uint32_t value = params->at(var_name);
 					int vis = std::stoi(input_wires[1]);
 					if (vis == (int) role) {
-						result = circ->PutINGate(value, bitlen, role);
+						if (circuit_type == "y") {
+							result = bcirc->PutINGate(value, bitlen, role);
+							result = add_conv_gate("b", circuit_type, result, party);
+						} else {
+							result = circ->PutINGate(value, bitlen, role);
+						}
 					} else if (vis == PUBLIC) {
 						int len = std::stoi(input_wires[2]);
 						if (len == 1) {
@@ -327,7 +333,12 @@ share* process_instruction(
 							}
 						}
 					} else {
-						result = circ->PutDummyINGate(bitlen);
+						if (circuit_type == "y") {
+							result = bcirc->PutDummyINGate(bitlen);
+							result = add_conv_gate("b", circuit_type, result, party);
+						} else {
+							result = circ->PutDummyINGate(bitlen);
+						}
 					} 
 				}
 				break;
@@ -399,10 +410,21 @@ std::vector<share*> process_bytecode(
 
 		std::string op = line[2+num_inputs+num_outputs];
 		std::string circuit_type;
+
 		if (num_outputs) {
 			circuit_type = share_map->at(output_wires[0]);
 		} else {
-			circuit_type = share_map->at(input_wires[0]);
+			if (share_map->find(input_wires[0]) != share_map->end()) {
+				circuit_type = share_map->at(input_wires[0]);
+			} else {
+				// This case is reached if the input is not used at all in the computation.
+				if (op_hash(op) == IN_) {
+					// if skipping an IN operation, remove a rewire
+					if (rewire_inputs.size() > 0)
+						rewire_inputs.pop_front();
+				}
+				continue;
+			}
 		}
 
 		if (parse_call_op(op)) {
@@ -412,9 +434,10 @@ std::vector<share*> process_bytecode(
 			// rewiring the input and output wires of the function
 			std::deque<std::string> rewire_inputs;
 			std::deque<std::string> rewire_outputs;
+
 			rewire_inputs.insert(rewire_inputs.end(), input_wires.begin(), input_wires.end());
 			rewire_outputs.insert(rewire_outputs.end(), output_wires.begin(), output_wires.end());
-			
+
 			// recursively call process bytecode on function body
 			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, rewire_inputs, rewire_outputs, params, share_map, role, bitlen, party);	
 
