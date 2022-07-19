@@ -394,6 +394,7 @@ std::vector<share*> process_bytecode(
 
 	std::vector<share*> out;
 	while (std::getline(file, str)) {
+		// std::cout << "line: " << str << std::endl;
         std::vector<std::string> line = split_(str);
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
