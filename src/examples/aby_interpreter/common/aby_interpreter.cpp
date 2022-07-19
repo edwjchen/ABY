@@ -381,7 +381,7 @@ std::vector<share*> process_bytecode(
 	e_role role,
 	uint32_t bitlen,
 	ABYParty* party) {
-	std::cout << "LOG: processing function: " << fn << std::endl;
+	// std::cout << "LOG: processing function: " << fn << std::endl;
 
 	auto path = bytecode_paths->at(fn);
 
@@ -470,7 +470,7 @@ void process_const(
 	e_role role,
 	uint32_t bitlen,
 	ABYParty* party) {
-	std::cout << "LOG: processing const" << std::endl;
+	// std::cout << "LOG: processing const" << std::endl;
 
 	std::ifstream file(const_path);
 	if (!file.is_open()) {
