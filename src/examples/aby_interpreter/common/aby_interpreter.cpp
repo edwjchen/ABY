@@ -32,10 +32,11 @@ enum op {
 	SHL_,
 	LSHR_,
 	DIV_,
+	STORE_,
+	SELECT_,
 	IN_,
 	OUT_,
-	CALL_,
-	STORE_,
+	CALL_
 };
 
 bool parse_call_op(std::string op) {
@@ -67,6 +68,7 @@ op op_hash(std::string o) {
 	if (o == "LSHR") return LSHR_;
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
+	if (o == "SELECT") return SELECT_;
 	if (o == "STORE") return STORE_;
 	if (parse_call_op(o)) return CALL_;
     throw std::invalid_argument("Unknown operator: "+o);
@@ -339,6 +341,27 @@ void process_instruction(
 				}
 				break;
 			} 
+			case SELECT_: {
+				auto index = input_wires[input_wires.size()-1];
+				auto index_wire = cache->at(index);
+				index_wire = add_conv_gate(share_map->at(index), circuit_type, index_wire, party);
+
+				// Set result to be the first element in the array
+				share* res = cache->at(input_wires[0]); 
+
+				// iterate through all input wires
+				for (int i = 0; i < input_wires.size() - 1; i++) {
+					share* ind = put_cons32_gate(circ, i);
+					share* sel = circ->PutEQGate(ind, index_wire);
+					sel = add_conv_gate("b", circuit_type, sel, party);
+					auto array_wire = cache->at(input_wires[i]);
+					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
+					res = circ->PutMUXGate(array_wire, res, sel);
+				}
+				assert(("more than one output wire", output_wires.size() == 1));
+				(*cache)[output_wires[0]] = res;
+				break;
+			}
 			case STORE_: {
 				assert(("len of input wires == len output wires + 2", input_wires.size() == output_wires.size() + 2));
 				auto value = input_wires[input_wires.size()-1];
@@ -462,12 +485,10 @@ std::vector<share*> process_bytecode(
 	std::ifstream file(path);
 	assert(("Bytecode file exists.", file.is_open()));
 	if (!file.is_open()) throw std::runtime_error("Bytecode file doesn't exist -- "+path);
-	std::string str;
-	Circuit* circ;
-
 	std::vector<share*> out;
+
+	std::string str;
 	while (std::getline(file, str)) {
-		// std::cout << "line: " << str << std::endl;
         std::vector<std::string> line = split_(str);
 		// std::cout << "line: " << str << std::endl;
 		if (line.size() < 4) continue;
@@ -543,7 +564,6 @@ void process_const(
 		return;
 	}
 
-	Circuit* circ;
 	std::vector<share*> out;
 
 	std::string str;
