@@ -268,23 +268,40 @@ void process_instruction(
 				break;
 			}
 			case MUX_: {
+				assert(("input_wires len is not odd", input_wires.size() % 2 == 1));
+
+				// sel 
 				share* sel = cache->at(input_wires[0]);
-				share* wire1 = cache->at(input_wires[1]);
-				share* wire2 = cache->at(input_wires[2]);
-
-				// add conversion gates
 				std::string share_type_sel = share_map->at(input_wires[0]);
-				std::string share_type_1 = share_map->at(input_wires[1]);
-				std::string share_type_2 = share_map->at(input_wires[2]);
-
 				sel = add_conv_gate(share_type_sel, circuit_type, sel, party);
-				wire1 = add_conv_gate(share_type_1, circuit_type, wire1, party);
-				wire2 = add_conv_gate(share_type_2, circuit_type, wire2, party);
+			
+				auto len = (input_wires.size() - 1) / 2 ;
 
-				result = circ->PutMUXGate(wire1, wire2, sel);
+				// t wires
+				auto start = 1;
+				std::vector<std::string> t_strs(len);
+				std::copy(input_wires.begin() + start, input_wires.begin() + len + start, t_strs.begin()); 
 
-				for (auto o: output_wires) {
-					(*cache)[o] = result;
+				// f wires
+				start += len;
+				std::vector<std::string> f_strs(len);
+				std::copy(input_wires.begin() + start, input_wires.begin() + len + start, f_strs.begin()); 
+
+				for (int i = 0; i < len; i++) {
+					// add conversion gates
+					std::string share_type_1 = share_map->at(t_strs[i]);
+					std::string share_type_2 = share_map->at(f_strs[i]);
+
+					share* t_wire = cache->at(t_strs[i]);
+					share* f_wire = cache->at(f_strs[i]);
+
+					t_wire = add_conv_gate(share_type_1, circuit_type, t_wire, party);
+					f_wire = add_conv_gate(share_type_2, circuit_type, f_wire, party);
+
+					result = circ->PutMUXGate(t_wire, f_wire, sel);
+
+					// set result
+					(*cache)[output_wires[i]] = result;
 				}
 				break;
 			}
