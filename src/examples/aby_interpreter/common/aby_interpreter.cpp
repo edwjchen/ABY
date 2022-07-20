@@ -35,6 +35,7 @@ enum op {
 	IN_,
 	OUT_,
 	CALL_,
+	STORE_,
 };
 
 bool parse_call_op(std::string op) {
@@ -66,6 +67,7 @@ op op_hash(std::string o) {
 	if (o == "LSHR") return LSHR_;
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
+	if (o == "STORE") return STORE_;
 	if (parse_call_op(o)) return CALL_;
     throw std::invalid_argument("Unknown operator: "+o);
 }
@@ -143,7 +145,7 @@ share* add_conv_gate(
 	}
 }
 
-share* process_instruction(
+void process_instruction(
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
 	std::deque<std::string>* rewire_inputs,
@@ -152,6 +154,7 @@ share* process_instruction(
 	std::unordered_map<std::string, std::string>* share_map,
 	std::vector<std::string> input_wires, 
 	std::vector<std::string> output_wires, 
+	std::vector<share*>* out, 
 	std::string op,
 	e_role role, 
 	uint32_t bitlen,
@@ -230,6 +233,10 @@ share* process_instruction(
 				throw std::invalid_argument("Unknown binop: " + op);
 			}
 		}
+
+		for (auto o: output_wires) {
+			(*cache)[o] = result;
+		}
 	} else {
 		switch(op_hash(op)) {
 			case CONS_bv: {
@@ -240,6 +247,10 @@ share* process_instruction(
 				} else {
 					result = put_cons32_gate(circ, value);
 				}
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			}
 			case CONS_bool: {
@@ -249,6 +260,10 @@ share* process_instruction(
 					result = add_conv_gate("b", circuit_type, result, party);
 				} else {
 					result = put_cons1_gate(circ, value);
+				}
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
 				}
 				break;
 			}
@@ -267,6 +282,10 @@ share* process_instruction(
 				wire2 = add_conv_gate(share_type_2, circuit_type, wire2, party);
 
 				result = circ->PutMUXGate(wire1, wire2, sel);
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			}
 			case NOT_: {
@@ -277,20 +296,54 @@ share* process_instruction(
 				wire = add_conv_gate(share_type, circuit_type, wire, party);
 				
 				result = ((BooleanCircuit *)circ)->PutINVGate(wire);
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			}
 			case SHL_: {
 				share* wire = cache->at(input_wires[0]);
 				int value = std::stoi(input_wires[1]);
 				result = left_shift(circ, wire, value);
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			} 
 			case LSHR_: {
 				share* wire = cache->at(input_wires[0]);
 				int value = std::stoi(input_wires[1]);
 				result = logical_right_shift(circ, wire, value);
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			} 
+			case STORE_: {
+				assert(("len of input wires == len output wires + 2", input_wires.size() == output_wires.size() + 2));
+				auto value = input_wires[input_wires.size()-1];
+				auto value_wire = cache->at(value);
+				value_wire = add_conv_gate(share_map->at(value), circuit_type, value_wire, party);
+				
+				auto index = input_wires[input_wires.size()-2];
+				auto index_wire = cache->at(index);
+				index_wire = add_conv_gate(share_map->at(index), circuit_type, index_wire, party);
+
+				for (int i = 0; i < output_wires.size(); i++) {
+					share* ind = put_cons32_gate(circ, i);
+					share* sel = circ->PutEQGate(ind, index_wire);
+					sel = add_conv_gate("b", circuit_type, sel, party);
+
+					auto array_wire = cache->at(input_wires[i]);
+					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
+
+					(*cache)[output_wires[i]] = circ->PutMUXGate(value_wire, array_wire, sel);
+ 				}
+				break;
+			}
 			case IN_: {
 				std::string var_name = input_wires[0];
 			
@@ -341,6 +394,10 @@ share* process_instruction(
 						}
 					} 
 				}
+
+				for (auto o: output_wires) {
+					(*cache)[o] = result;
+				}
 				break;
 			}
 			case OUT_: {
@@ -356,8 +413,9 @@ share* process_instruction(
 					result = rewire_share;
 				} else {
 					share* wire = cache->at(input_wires[0]);
-					result = circ->PutOUTGate(wire, ALL);
+					result = circ->PutOUTGate(wire, ALL);					
 				}
+				out->push_back(result);
 				break;
 			}
 			default: {
@@ -366,7 +424,6 @@ share* process_instruction(
 		}
 	}
 	
-	return result;
 }
 
 
@@ -389,13 +446,13 @@ std::vector<share*> process_bytecode(
 	assert(("Bytecode file exists.", file.is_open()));
 	if (!file.is_open()) throw std::runtime_error("Bytecode file doesn't exist -- "+path);
 	std::string str;
-	share* last_instr;
 	Circuit* circ;
 
 	std::vector<share*> out;
 	while (std::getline(file, str)) {
 		// std::cout << "line: " << str << std::endl;
         std::vector<std::string> line = split_(str);
+		// std::cout << "line: " << str << std::endl;
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
 		int num_outputs = std::stoi(line[1]);
@@ -447,17 +504,9 @@ std::vector<share*> process_bytecode(
 				(*cache)[output_wires[i]] = out_shares[i];
 			}
 		} else {
-			last_instr = process_instruction(circuit_type, cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, op, role, bitlen, party);
+			process_instruction(circuit_type, cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
 			assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
-
-			for (auto o: output_wires) {
-				(*cache)[o] = last_instr;
-			}
 		}
-
-		if (op_hash(op) == OUT_) {
-			out.push_back(last_instr);
-		} 
 	}
 
 	return out;
@@ -477,11 +526,10 @@ void process_const(
 		return;
 	}
 
-	share* last_instr;
 	Circuit* circ;
+	std::vector<share*> out;
 
 	std::string str;
-	std::vector<share*> out;
 	while (std::getline(file, str)) {
         std::vector<std::string> line = split_(str);
 		if (line.size() < 4) continue;
@@ -505,11 +553,8 @@ void process_const(
 			circuit_type = share_map->at(input_wires[0]);
 		}
 
-		last_instr = process_instruction(circuit_type, cache, {}, {}, {}, share_map, input_wires, output_wires, op, role, bitlen, party);
+		process_instruction(circuit_type, cache, {}, {}, {}, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
 		assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
-		for (auto o: output_wires) {
-			(*cache)[o] = last_instr;
-		}
 	}
 }
 
