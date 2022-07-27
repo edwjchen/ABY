@@ -25,8 +25,7 @@ enum op {
 	AND_,
 	OR_,
 	XOR_,
-	CONS_bv,
-	CONS_bool,
+	CONS_,
 	MUX_, 
 	NOT_,
 	SHL_,
@@ -59,8 +58,7 @@ op op_hash(std::string o) {
 	if (o == "AND") return AND_;
 	if (o == "OR") return OR_;
 	if (o == "XOR") return XOR_;
-	if (o == "CONS_bv") return CONS_bv;
-	if (o == "CONS_bool") return CONS_bool;
+	if (o == "CONS") return CONS_;
 	if (o == "MUX") return MUX_;
 	if (o == "NOT") return NOT_;
 	if (o == "DIV") return DIV_;
@@ -162,7 +160,9 @@ void process_instruction(
 	uint32_t bitlen,
 	ABYParty* party) {
 	std::vector<Sharing*>& sharings = party->GetSharings();
+	Circuit* acirc = sharings[S_ARITH]->GetCircuitBuildRoutine();
 	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
+	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 
 	Circuit* circ = get_circuit(circuit_type, party);
 	share* result;
@@ -241,29 +241,36 @@ void process_instruction(
 		}
 	} else {
 		switch(op_hash(op)) {
-			case CONS_bv: {
+			case CONS_: {
 				int value = std::stoi(input_wires[0]);
-				if (circuit_type == "y") {
-					result = put_cons32_gate(bcirc, value);
-					result = add_conv_gate("b", circuit_type, result, party);
+				int len = std::stoi(input_wires[1]);
+				if (circuit_type == "a") {
+					if (len == 1) {
+						result = put_cons1_gate(acirc, value);
+					} else if (len == 32) {
+						result = put_cons32_gate(acirc, value);
+					} else {
+						throw std::runtime_error("Unknown const bit len: "+input_wires[2]);
+					}
+				} else if (circuit_type == "b") {
+					if (len == 1) {
+						result = put_cons1_gate(bcirc, value);
+					} else if (len == 32) {
+						result = put_cons32_gate(bcirc, value);
+					} else {
+						throw std::runtime_error("Unknown const bit len: "+input_wires[2]);
+					}
+				} else if (circuit_type == "y") {
+					if (len == 1) {
+						result = put_cons1_gate(ycirc, value);
+					} else if (len == 32) {
+						result = put_cons32_gate(ycirc, value);
+					} else {
+						throw std::runtime_error("Unknown const bit len: "+input_wires[2]);
+					}
 				} else {
-					result = put_cons32_gate(circ, value);
+					throw std::runtime_error("Unknown share type: "+circuit_type);
 				}
-
-				for (auto o: output_wires) {
-					(*cache)[o] = result;
-				}
-				break;
-			}
-			case CONS_bool: {
-				int value = std::stoi(input_wires[0]);
-				if (circuit_type == "y") {
-					result = put_cons1_gate(bcirc, value);
-					result = add_conv_gate("b", circuit_type, result, party);
-				} else {
-					result = put_cons1_gate(circ, value);
-				}
-
 				for (auto o: output_wires) {
 					(*cache)[o] = result;
 				}
@@ -342,6 +349,7 @@ void process_instruction(
 				break;
 			} 
 			case SELECT_: {
+				assert(("Select circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				auto index = input_wires[input_wires.size()-1];
 				auto index_wire = cache->at(index);
 				index_wire = add_conv_gate(share_map->at(index), circuit_type, index_wire, party);
@@ -353,7 +361,6 @@ void process_instruction(
 				for (int i = 0; i < input_wires.size() - 1; i++) {
 					share* ind = put_cons32_gate(circ, i);
 					share* sel = circ->PutEQGate(ind, index_wire);
-					sel = add_conv_gate("b", circuit_type, sel, party);
 					auto array_wire = cache->at(input_wires[i]);
 					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
 					res = circ->PutMUXGate(array_wire, res, sel);
@@ -363,6 +370,7 @@ void process_instruction(
 				break;
 			}
 			case STORE_: {
+				assert(("Store circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				assert(("len of input wires == len output wires + 2", input_wires.size() == output_wires.size() + 2));
 				auto value = input_wires[input_wires.size()-1];
 				auto value_wire = cache->at(value);
@@ -375,11 +383,8 @@ void process_instruction(
 				for (int i = 0; i < output_wires.size(); i++) {
 					share* ind = put_cons32_gate(circ, i);
 					share* sel = circ->PutEQGate(ind, index_wire);
-					sel = add_conv_gate("b", circuit_type, sel, party);
-
 					auto array_wire = cache->at(input_wires[i]);
 					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
-
 					(*cache)[output_wires[i]] = circ->PutMUXGate(value_wire, array_wire, sel);
  				}
 				break;
@@ -402,36 +407,16 @@ void process_instruction(
 					uint32_t value = params->at(var_name);
 					int vis = std::stoi(input_wires[1]);
 					if (vis == (int) role) {
-						if (circuit_type == "y") {
-							result = bcirc->PutINGate(value, bitlen, role);
-							result = add_conv_gate("b", circuit_type, result, party);
-						} else {
-							result = circ->PutINGate(value, bitlen, role);
-						}
+						result = circ->PutINGate(value, bitlen, role);
 					} else if (vis == PUBLIC) {
 						int len = std::stoi(input_wires[2]);
 						if (len == 1) {
-							if (circuit_type == "y") {
-								result = put_cons1_gate(bcirc, value);
-								result = add_conv_gate("b", circuit_type, result, party);
-							} else {
-								result = put_cons1_gate(circ, value);
-							}
+							result = put_cons1_gate(circ, value);
 						} else {
-							if (circuit_type == "y") {
-								result = put_cons32_gate(bcirc, value);
-								result = add_conv_gate("b", circuit_type, result, party);
-							} else {
-								result = put_cons32_gate(circ, value);
-							}
+							result = put_cons32_gate(circ, value);
 						}
 					} else {
-						if (circuit_type == "y") {
-							result = bcirc->PutDummyINGate(bitlen);
-							result = add_conv_gate("b", circuit_type, result, party);
-						} else {
-							result = circ->PutDummyINGate(bitlen);
-						}
+						result = circ->PutDummyINGate(bitlen);
 					} 
 				}
 
@@ -446,7 +431,7 @@ void process_instruction(
 					// add conversion gates
 					std::string share_type_from = share_map->at(input_wires[0]);
 					std::string share_type_to = share_map->at(rewire_outputs->at(0));
-					share* rewire_share = cache->at(input_wires[0]);					
+					share* rewire_share = cache->at(input_wires[0]);		
 					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
 					cache->insert(std::pair<std::string, share*>(rewire_outputs->at(0), rewire_share));
 					rewire_outputs->pop_front();
@@ -490,7 +475,7 @@ std::vector<share*> process_bytecode(
 	std::string str;
 	while (std::getline(file, str)) {
         std::vector<std::string> line = split_(str);
-		// std::cout << "line: " << str << std::endl;
+		// std::cout << "line: "  << str << std::endl;
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
 		int num_outputs = std::stoi(line[1]);
@@ -558,7 +543,6 @@ void process_const(
 	uint32_t bitlen,
 	ABYParty* party) {
 	// std::cout << "LOG: processing const" << std::endl;
-
 	std::ifstream file(const_path);
 	if (!file.is_open()) {
 		return;
