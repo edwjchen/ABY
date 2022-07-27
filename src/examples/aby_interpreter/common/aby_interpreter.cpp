@@ -148,6 +148,7 @@ share* add_conv_gate(
 void process_instruction(
 	std::string circuit_type,
 	std::unordered_map<std::string, share*>* cache, 
+	std::unordered_map<std::string, uint32_t>* const_cache,
 	std::deque<std::string>* rewire_inputs,
 	std::deque<std::string>* rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
@@ -188,7 +189,23 @@ void process_instruction(
 				break;
 			}
 			case MUL_: {
-				result = circ->PutMULGate(wire1, wire2);
+				// result = circ->PutMULGate(wire1, wire2);
+				// const mult trick
+				if (circuit_type == "y" || circuit_type == "b") {
+					if(const_cache->find(input_wires[0]) != const_cache->end()) {
+						uint32_t value = const_cache->at(input_wires[0]);
+						// do 
+						result = constMult(circ, wire2, value);
+					} else if (const_cache->find(input_wires[1]) != const_cache->end()) {
+						uint32_t value = const_cache->at(input_wires[1]);
+						result = constMult(circ, wire1, value);
+					} else {
+						result = circ->PutMULGate(wire1, wire2);
+					}
+				} else{
+					result = circ->PutMULGate(wire1, wire2);
+				}
+				// result = circ->PutMULGate(wire1, wire2);
 				break;
 			}
 			case GT_: {
@@ -456,6 +473,7 @@ std::vector<share*> process_bytecode(
 	std::string fn, 
 	std::unordered_map<std::string, std::string>* bytecode_paths,
 	std::unordered_map<std::string, share*>* cache,
+	std::unordered_map<std::string, uint32_t>* const_cache,
 	std::deque<std::string> rewire_inputs,
 	std::deque<std::string> rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
@@ -520,14 +538,14 @@ std::vector<share*> process_bytecode(
 			rewire_outputs.insert(rewire_outputs.end(), output_wires.begin(), output_wires.end());
 
 			// recursively call process bytecode on function body
-			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, rewire_inputs, rewire_outputs, params, share_map, role, bitlen, party);	
+			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, const_cache, rewire_inputs, rewire_outputs, params, share_map, role, bitlen, party);	
 
 			assert(("Out_shares and output_wires are the same size", out_shares.size() == output_wires.size()));
 			for (int i = 0; i < out_shares.size(); i++) {
 				(*cache)[output_wires[i]] = out_shares[i];
 			}
 		} else {
-			process_instruction(circuit_type, cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
+			process_instruction(circuit_type, cache, const_cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
 			assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
 		}
 	}
@@ -537,6 +555,7 @@ std::vector<share*> process_bytecode(
 
 void process_const(
 	std::unordered_map<std::string, share*>* cache,
+	std::unordered_map<std::string, uint32_t>* const_cache,
 	std::string const_path, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role,
@@ -574,7 +593,7 @@ void process_const(
 			circuit_type = share_map->at(input_wires[0]);
 		}
 
-		process_instruction(circuit_type, cache, {}, {}, {}, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
+		process_instruction(circuit_type, cache, const_cache, {}, {}, {}, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
 		assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
 	}
 }
@@ -599,12 +618,17 @@ double test_aby_test_circuit(
 
 	// share cache
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
+	std::unordered_map<std::string, uint32_t>* const_cache = new std::unordered_map<std::string, uint32_t>();
+
+		std::cout << "processing consts" << std::endl;
 
 	// process consts 
-	process_const(cache, const_path, share_map, role, bitlen, party);
+	process_const(cache, const_cache, const_path, share_map, role, bitlen, party);
+
+	std::cout << "processed consts" << std::endl;
 
 	// process bytecode
-	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, {}, {}, params, share_map, role, bitlen, party);	
+	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, const_cache, {}, {}, params, share_map, role, bitlen, party);	
 
 	// multiple outputs
 	for (auto s: out_shares) {

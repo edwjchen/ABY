@@ -33,6 +33,7 @@ SOFTWARE.
 #include <cstdlib>
 #include <iostream>
 #include <cmath>
+#include <bitset>
 
 using namespace std;
 
@@ -60,7 +61,7 @@ share* left_shift(Circuit* c, share* val, uint32_t shift_factor) {
   share* fresh_zero_share = put_cons32_gate(c, 0);
   std::vector<uint32_t> val_wires = val->get_wires();
   if(share_wire_count == 1){
-    cout<<"LOG: Error. Share not padded. A share cannot exist with just 1 wire.\n";
+    cout<<"Error. Share not padded. A share cannot exist with just 1 wire.\n";
   }
   // Note here the assumption is that if we receive the val share as a share of size 32, we output the share as a share of size 32 only and drop the MSBs which overflow the 32 bit constraint.
   for(int i=0; i+shift_factor<share_wire_count; i++){
@@ -200,27 +201,243 @@ share* longDivision(Circuit* c, share* x, share* y, uint32_t getQuotient){
   share* divisor = q;
   share* cond = put_cons1_gate(c, 0);
   for (uint32_t iter =  (int32_t)0; iter <  (int32_t)32; iter++){
+    // 2600
     uint32_t i = ( (int32_t)31 - iter);
     divisor = left_shift(c, divisor,  (uint32_t)1);
+    // 2632
     uint32_t __tac_var46 = ( (uint32_t)1 << i);
     share* __tac_var47 = put_cons32_gate(c, __tac_var46);
+    // 2664
     share* __tac_var48 = c->PutANDGate(x, __tac_var47);
+    // 2696
     share* __tac_var49 = logical_right_shift(c, __tac_var48, i);
+    // 2728
     divisor = c->PutADDGate(divisor, __tac_var49);
+    // 3064
     cond = unsignedgeqbl(c, divisor, y);
+    // 3279
     share* __tac_var50 = c->PutSUBGate(divisor, y);
+    // 3500
     divisor = c->PutMUXGate(__tac_var50, divisor, cond);
+    // 3537
     q = left_shift(c, q,  (uint32_t)1);
+    // 3569
     share* __tac_var51 = put_cons32_gate(c,  (uint32_t)1);
+    // 3601
     share* __tac_var52 = c->PutADDGate(q, __tac_var51);
+    // 3937
     q = c->PutMUXGate(__tac_var52, q, cond);
+    // 3974
   }
   share* __tac_var53 = getQuotient ? q : divisor;
   return __tac_var53;
 }
 
+std::pair<share*, share*> full_adder(Circuit* c, share* x, share* y, share* carry){
+  share* xor1_out = c->PutXORGate(x, carry);
+  share* xor2_out = c->PutXORGate(y, carry);
+
+  share* and_out = c->PutANDGate(xor1_out, xor2_out);
+
+  share* sum = c->PutXORGate(x, xor2_out);
+  share* carry_out = c->PutXORGate(and_out, carry);
+  return {sum, carry_out};
+}
+
+share* c_select(Circuit* circ, share* a, share* b, share* c){
+  share* bxorc = circ->PutXORGate(b, c);
+  share* aandbxorc = circ->PutANDGate(a, bxorc);
+  return circ->PutXORGate(c, aandbxorc);
+}
+
+share* c_or(Circuit* c, share* a, share* b){
+  return ((BooleanCircuit *) c)->PutINVGate(c->PutANDGate(((BooleanCircuit *) c)->PutINVGate(a), ((BooleanCircuit *) c)->PutINVGate(b)));
+}
+
+// A fast mult
+share* constMult(Circuit* c, share* x, uint32_t y){
+  uint32_t width = x->get_bitlength();
+
+  vector<share*> bvx;
+  vector<bool> bvy;
+  vector<share*> res;
+  uint32_t len = 0;
+  bitset<32> bits = y;
+
+  for(int i = 0; i < width; i++){
+    res.push_back(put_cons1_gate(c, (uint64_t)0));
+    bvx.push_back(x->get_wire_ids_as_share(i));
+  }
+
+  for(int i = 0; i < 32; i++){
+    if(bits[i]){
+      bvy.push_back(true);
+      len = i + 1;
+    } else{
+      bvy.push_back(false);
+    }
+  }
+
+  for(int i = 0; i < len; i++){
+    if(bvy[i]){
+      vector<share*> bv_tmp;
+      for(int j = 0; j < i; j++){
+        bv_tmp.push_back(put_cons1_gate(c, (uint64_t)0));
+      }
+
+      for(int j = i; j < width; j++){
+        bv_tmp.push_back(bvx[j - i]);
+      }
+
+      // add 
+      if(i == 0){
+        res = bv_tmp;
+      } else{
+        vector<share*> sum;
+        share* carry_in = put_cons1_gate(c, (uint64_t)0);
+        for (int idx = 0; idx < width; idx ++){
+          share* tmp;
+          std::tie(tmp, carry_in) = full_adder(c, res[idx], bv_tmp[idx], carry_in);
+          sum.push_back(tmp);
+        }
+        res = sum;
+      }
+    }
+  }
+
+  share* out  = new boolshare(width, c);
+  vector<uint32_t> wires;
+
+  for(int i = 0; i < width; i ++){
+    wires.push_back(res[i]->get_wire_id(0));
+  }
+
+  out->set_wire_ids(wires);
+  return out;
+}
+
+// A fast long division algo from HyCC
+share* fastLongDivision(Circuit* c, share* x, share* y, uint32_t getQuotient){
+  uint32_t width = x->get_bitlength();
+
+  // share* rem = new boolshare(width, c);
+  // share* div = new boolshare(width, c);
+  
+  vector<share*> res;
+  vector<share*> rem;
+
+  vector<share*> bvx;
+  vector<share*> bvy;
+  vector<share*> bits_set;
+
+  for(int i = 0; i < width; i++){
+    res.push_back(put_cons1_gate(c, (uint64_t)0));
+    rem.push_back(put_cons1_gate(c, (uint64_t)0));
+    bvx.push_back(x->get_wire_ids_as_share(i));
+    bvy.push_back(y->get_wire_ids_as_share(i));
+    bits_set.push_back(x->get_wire_ids_as_share(i));
+  }
+
+  // assign or
+  for(int i = width - 2; i >= 0; i--){
+    bits_set[i] = c_or(c, bits_set[i+1], bits_set[i]);
+  }
+
+  for(int i = width - 1; i >= 0; i--){
+    int sub_bits = width - i;
+    if( i < width - 1){
+      for(int j = (width) - 1; j > 0; j--){
+        rem[j] = rem[j - 1];
+      }
+    }
+    rem[0] = bvx[i];
+
+    vector<share*> remtemp;
+    vector<share*> div;
+
+    // ?BUGGY
+    for(int i = 0; i < sub_bits; i++){
+      remtemp.push_back(rem[i]);
+      div.push_back(bvy[i]);
+    }
+
+    // basic adder
+    share* carry_out = put_cons1_gate(c, (uint64_t)0);
+    share* carry_in = put_cons1_gate(c, (uint64_t)1);
+    // remtemp - div
+
+    vector<share*> sum;
+    for (int i = 0; i < sub_bits; i ++){
+      share* tmp;
+      std::tie(tmp, carry_in) = full_adder(c, remtemp[i], ((BooleanCircuit *) c)->PutINVGate(div[i]), carry_in);
+      sum.push_back(tmp);
+    }
+
+    if(i > 0){
+      share* tmp = c_or(c, ((BooleanCircuit *) c)->PutINVGate(carry_in), bits_set[sub_bits]);
+      res[i] = ((BooleanCircuit *) c)->PutINVGate(tmp);
+      for(int j = 0; j < sub_bits; j++){
+        rem[j] = c_select(c, res[i], sum[j], rem[j]);
+      }
+    } else{
+      res[i] = carry_in;
+      for(int j = 0; j < sub_bits; j++){
+        rem[j] = c_select(c, res[i], sum[j], rem[j]);
+      }
+    }
+  }
+
+  share* out  = new boolshare(width, c);
+  vector<uint32_t> wires;
+  if(getQuotient){
+    for(int i = 0; i < width; i ++){
+      wires.push_back(res[i]->get_wire_id(0));
+    }
+  } else{
+    for(int i = 0; i < width; i ++){
+      wires.push_back(rem[i]->get_wire_id(0));
+    }
+  }
+  out->set_wire_ids(wires);
+  return out;
+}
+
+share* cond_negate(Circuit* c, share* x, share* cond){
+  vector<share*> bvx;
+  vector<share*> bvnx;
+  vector<share*> res;
+
+  uint32_t width = x->get_bitlength();
+
+  share* carry = put_cons1_gate(c, (uint64_t)1);
+
+  // Inv x and increment by 1
+  for(int i = 0; i < width; i++){
+    bvx.push_back(x->get_wire_ids_as_share(i));
+    bvnx.push_back(((BooleanCircuit *) c)->PutINVGate(bvx[i]));
+    share* new_carry = c->PutANDGate(bvnx[i], carry);
+    bvnx[i] = c->PutXORGate(bvnx[i], carry);
+    carry = new_carry;
+  }
+
+  // cond select
+  for(int i = 0; i < width; i++){
+    res.push_back(c_select(c, cond, bvnx[i], bvx[i]));
+  }
+  share* out  = new boolshare(width, c);
+  vector<uint32_t> wires;
+
+  for(int i = 0; i < width; i ++){
+    wires.push_back(res[i]->get_wire_id(0));
+  }
+
+  out->set_wire_ids(wires);
+  return out;
+}
+
+
 share* unsigneddivbl(Circuit* c, share* x, share* y){
-  share* __tac_var54 = longDivision(c, x, y, 1);
+  share* __tac_var54 = fastLongDivision(c, x, y, 1);
   return __tac_var54;
 }
 
@@ -232,22 +449,33 @@ share* unsigneddival(Circuit* c, share* x, share* y){
 }
 
 share* signeddivbl(Circuit* c, share* x, share* y){
-  share* __tac_var56 = put_cons32_gate(c,  (int32_t)0);
-  share* isXNeg = signedltbl(c, x, __tac_var56);
-  share* __tac_var57 = __tac_var56;
-  share* isYNeg = signedltbl(c, y, __tac_var56);
-  share* __tac_var58 = __tac_var56;
-  share* __tac_var59 = c->PutSUBGate(__tac_var56, x);
-  share* ux = c->PutMUXGate(__tac_var59, x, isXNeg);
-  share* __tac_var60 = __tac_var56;
-  share* __tac_var61 = c->PutSUBGate(__tac_var56, y);
-  share* uy = c->PutMUXGate(__tac_var61, y, isYNeg);
-  share* ures = unsigneddivbl(c, ux, uy);
+  uint32_t width = x->get_bitlength();
+  share* isXNeg = x->get_wire_ids_as_share(width - 1);
+  share* isYNeg = y->get_wire_ids_as_share(width - 1);
+
+  share* unsignedX = cond_negate(c, x, isXNeg);
+  share* unsignedY = cond_negate(c, y, isYNeg);
+
+  share* unsigned_res = fastLongDivision(c, unsignedX, unsignedY, 1);
+
   share* isResNeg = c->PutXORGate(isXNeg, isYNeg);
-  share* __tac_var62 = put_cons32_gate(c,  (uint32_t)0);
-  share* __tac_var63 = c->PutSUBGate(__tac_var62, ures);
-  share* __tac_var64 = c->PutMUXGate(__tac_var63, ures, isResNeg);
-  return __tac_var64;
+  return cond_negate(c, unsigned_res, isResNeg);
+  // share* __tac_var56 = put_cons32_gate(c,  (int32_t)0);
+  // share* isXNeg = signedltbl(c, x, __tac_var56);
+  // share* __tac_var57 = __tac_var56;
+  // share* isYNeg = signedltbl(c, y, __tac_var56);
+  // share* __tac_var58 = __tac_var56;
+  // share* __tac_var59 = c->PutSUBGate(__tac_var56, x);
+  // share* ux = c->PutMUXGate(__tac_var59, x, isXNeg);
+  // share* __tac_var60 = __tac_var56;
+  // share* __tac_var61 = c->PutSUBGate(__tac_var56, y);
+  // share* uy = c->PutMUXGate(__tac_var61, y, isYNeg);
+  // share* ures = unsigneddivbl(c, ux, uy);
+  // share* isResNeg = c->PutXORGate(isXNeg, isYNeg);
+  // share* __tac_var62 = put_cons32_gate(c,  (uint32_t)0);
+  // share* __tac_var63 = c->PutSUBGate(__tac_var62, ures);
+  // share* __tac_var64 = c->PutMUXGate(__tac_var63, ures, isResNeg);
+  // return __tac_var64;
 }
 
 share* signeddival(Circuit* c, share* x, share* y){
@@ -258,7 +486,7 @@ share* signeddival(Circuit* c, share* x, share* y){
 }
 
 share* unsignedmodbl(Circuit* c, share* x, share* y){
-  share* __tac_var66 = longDivision(c, x, y, 0);
+  share* __tac_var66 = fastLongDivision(c, x, y, 0);
   return __tac_var66;
 }
 
@@ -270,21 +498,31 @@ share* unsignedmodal(Circuit* c, share* x, share* y){
 }
 
 share* signedmodbl(Circuit* c, share* x, share* y){
-  share* __tac_var68 = put_cons32_gate(c,  (int32_t)0);
-  share* isXNeg = signedltbl(c, x, __tac_var68);
-  share* __tac_var69 = __tac_var68;
-  share* isYNeg = signedltbl(c, y, __tac_var68);
-  share* __tac_var70 = __tac_var68;
-  share* __tac_var71 = c->PutSUBGate(__tac_var68, x);
-  share* ux = c->PutMUXGate(__tac_var71, x, isXNeg);
-  share* __tac_var72 = __tac_var68;
-  share* __tac_var73 = c->PutSUBGate(__tac_var68, y);
-  share* uy = c->PutMUXGate(__tac_var73, y, isYNeg);
-  share* urem = unsignedmodbl(c, ux, uy);
-  share* __tac_var74 = put_cons32_gate(c,  (uint32_t)0);
-  share* __tac_var75 = c->PutSUBGate(__tac_var74, urem);
-  share* __tac_var76 = c->PutMUXGate(__tac_var75, urem, isXNeg);
-  return __tac_var76;
+  uint32_t width = x->get_bitlength();
+  share* isXNeg = x->get_wire_ids_as_share(width - 1);
+  share* isYNeg = y->get_wire_ids_as_share(width - 1);
+
+  share* unsignedX = cond_negate(c, x, isXNeg);
+  share* unsignedY = cond_negate(c, y, isYNeg);
+
+  share* unsigned_res = fastLongDivision(c, unsignedX, unsignedY, 0);
+
+  return cond_negate(c, unsigned_res, isXNeg);
+  // share* __tac_var68 = put_cons32_gate(c,  (int32_t)0);
+  // share* isXNeg = signedltbl(c, x, __tac_var68);
+  // share* __tac_var69 = __tac_var68;
+  // share* isYNeg = signedltbl(c, y, __tac_var68);
+  // share* __tac_var70 = __tac_var68;
+  // share* __tac_var71 = c->PutSUBGate(__tac_var68, x);
+  // share* ux = c->PutMUXGate(__tac_var71, x, isXNeg);
+  // share* __tac_var72 = __tac_var68;
+  // share* __tac_var73 = c->PutSUBGate(__tac_var68, y);
+  // share* uy = c->PutMUXGate(__tac_var73, y, isYNeg);
+  // share* urem = unsignedmodbl(c, ux, uy);
+  // share* __tac_var74 = put_cons32_gate(c,  (uint32_t)0);
+  // share* __tac_var75 = c->PutSUBGate(__tac_var74, urem);
+  // share* __tac_var76 = c->PutMUXGate(__tac_var75, urem, isXNeg);
+  // return __tac_var76;
 }
 
 share* signedmodal(Circuit* c, share* x, share* y){
