@@ -590,4 +590,3 @@ void flush_output_queue(output_queue &q, e_role role, uint32_t bitlen)
   }
 }
 #endif
-

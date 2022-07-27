@@ -620,12 +620,8 @@ double test_aby_test_circuit(
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
 	std::unordered_map<std::string, uint32_t>* const_cache = new std::unordered_map<std::string, uint32_t>();
 
-		std::cout << "processing consts" << std::endl;
-
 	// process consts 
 	process_const(cache, const_cache, const_path, share_map, role, bitlen, party);
-
-	std::cout << "processed consts" << std::endl;
 
 	// process bytecode
 	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, const_cache, {}, {}, params, share_map, role, bitlen, party);	
