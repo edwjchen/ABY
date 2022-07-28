@@ -122,24 +122,26 @@ int main(int argc, char** argv) {
 
 	e_role role; 
 	uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
-	uint16_t port = 7766;
-	std::string address = "127.0.0.1";
 	int32_t test_op = -1;
 	e_mt_gen_alg mt_alg = MT_OT;
 	seclvl seclvl = get_sec_lvl(secparam);
 
     argparse::ArgumentParser program("aby_interpreter");
     program.add_argument("-m", "--mode").required().help("Mode for parsing test inputs");
-    program.add_argument("-r", "--role").required().help("Role: <Server:0 / Client:1>").scan<'i', int>();;
-    program.add_argument("-p", "--path").required().help("Path");
+    program.add_argument("-r", "--role").required().help("Role: <Server:0 / Client:1>").scan<'i', int>();
+    program.add_argument("-f", "--file").required().help("File");
     program.add_argument("-t", "--test").required().help("Test inputs");
+    program.add_argument("-a", "--address").required().help("Address").default_value(std::string{"127.0.0.1"});
+    program.add_argument("-p", "--port").required().help("Port").scan<'i', int>().default_value(7766);;
     program.parse_args(argc, argv);    // Example: ./main --color orange
     
     std::string m, path, test_path;
     m = program.get<std::string>("--mode");  
     role = !program.get<int>("--role") ? SERVER : CLIENT;
-    path = program.get<std::string>("--path");
+    path = program.get<std::string>("--file");
     test_path = program.get<std::string>("--test");
+	std::string address = program.get<std::string>("--address");
+    uint16_t port = program.get<int>("--port");
 
 	std::unordered_map<std::string, uint32_t> params;
     std::unordered_map<std::string, std::string> share_map;
