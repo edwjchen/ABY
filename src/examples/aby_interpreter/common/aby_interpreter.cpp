@@ -26,16 +26,21 @@ enum op {
 	OR_,
 	XOR_,
 	CONS_,
+	CONS_ARRAY,
 	MUX_, 
 	NOT_,
 	SHL_,
 	LSHR_,
 	DIV_,
-	STORE_,
 	SELECT_,
+	SELECT_CONS,
+	STORE_,
+	STORE_CONS,
+	FIELD_, 
+	FIELD_VEC, 
 	IN_,
 	OUT_,
-	CALL_
+	CALL_,
 };
 
 bool parse_call_op(std::string op) {
@@ -59,6 +64,7 @@ op op_hash(std::string o) {
 	if (o == "OR") return OR_;
 	if (o == "XOR") return XOR_;
 	if (o == "CONS") return CONS_;
+	if (o == "CONS_ARRAY") return CONS_ARRAY;
 	if (o == "MUX") return MUX_;
 	if (o == "NOT") return NOT_;
 	if (o == "DIV") return DIV_;
@@ -67,7 +73,11 @@ op op_hash(std::string o) {
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
 	if (o == "SELECT") return SELECT_;
+	if (o == "SELECT_CONS") return SELECT_CONS;
 	if (o == "STORE") return STORE_;
+	if (o == "STORE_CONS") return STORE_CONS;
+	if (o == "FIELD") return FIELD_;
+	if (o == "FIELD_VEC") return FIELD_VEC;
 	if (parse_call_op(o)) return CALL_;
     throw std::invalid_argument("Unknown operator: "+o);
 }
@@ -147,12 +157,12 @@ share* add_conv_gate(
 
 void process_instruction(
 	std::string circuit_type,
-	std::unordered_map<std::string, share*>* cache, 
+	std::unordered_map<std::string, std::vector<share*>>* cache, 
 	std::unordered_map<std::string, uint32_t>* const_cache,
-	std::deque<std::string>* rewire_inputs,
-	std::deque<std::string>* rewire_outputs,
+	std::unordered_map<share*, std::string>* share_type_cache, 
+	std::deque<share*>* rewire_inputs,
+	bool rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
-	std::unordered_map<std::string, std::string>* share_map,
 	std::vector<std::string> input_wires, 
 	std::vector<std::string> output_wires, 
 	std::vector<share*>* out, 
@@ -169,12 +179,12 @@ void process_instruction(
 	share* result;
 
 	if (is_bin_op(op_hash(op))) {		
-		share* wire1 = cache->at(input_wires[0]);
-		share* wire2 = cache->at(input_wires[1]);
+		share* wire1 = cache->at(input_wires[0])[0];
+		share* wire2 = cache->at(input_wires[1])[0];
 
 		// add conversion gates
-		std::string share_type_1 = share_map->at(input_wires[0]);
-		std::string share_type_2 = share_map->at(input_wires[1]);
+		std::string share_type_1 = share_type_cache->at(wire1);
+		std::string share_type_2 = share_type_cache->at(wire2);
 
 		wire1 = add_conv_gate(share_type_1, circuit_type, wire1, party);
 		wire2 = add_conv_gate(share_type_2, circuit_type, wire2, party);
@@ -189,7 +199,6 @@ void process_instruction(
 				break;
 			}
 			case MUL_: {
-				// result = circ->PutMULGate(wire1, wire2);
 				// const mult trick
 				if (circuit_type == "y" || circuit_type == "b") {
 					if(const_cache->find(input_wires[0]) != const_cache->end()) {
@@ -205,7 +214,6 @@ void process_instruction(
 				} else{
 					result = circ->PutMULGate(wire1, wire2);
 				}
-				// result = circ->PutMULGate(wire1, wire2);
 				break;
 			}
 			case GT_: {
@@ -254,7 +262,8 @@ void process_instruction(
 		}
 
 		for (auto o: output_wires) {
-			(*cache)[o] = result;
+			(*cache)[o] = {result};
+			(*share_type_cache)[result] = circuit_type;
 		}
 	} else {
 		switch(op_hash(op)) {
@@ -289,121 +298,166 @@ void process_instruction(
 					throw std::runtime_error("Unknown share type: "+circuit_type);
 				}
 				for (auto o: output_wires) {
-					(*cache)[o] = result;
+					(*cache)[o] = {result};
+					(*share_type_cache)[result] = circuit_type;
+				}
+				break;
+			}
+			case CONS_ARRAY: {
+				std::vector<share*> array;
+				for (auto s: input_wires) {
+					auto array_share = cache->at(s)[0];
+					array.push_back(array_share);
+				}
+				for (auto o: output_wires) {
+					(*cache)[o] = array;
 				}
 				break;
 			}
 			case MUX_: {
-				assert(("input_wires len is not odd", input_wires.size() % 2 == 1));
-
 				// sel 
-				share* sel = cache->at(input_wires[0]);
-				std::string share_type_sel = share_map->at(input_wires[0]);
+				share* sel = cache->at(input_wires[0])[0];
+				std::string share_type_sel = share_type_cache->at(sel);
 				sel = add_conv_gate(share_type_sel, circuit_type, sel, party);
-			
-				auto len = (input_wires.size() - 1) / 2 ;
+	
+				std::vector<share*> t_wires = cache->at(input_wires[1]);
+				std::vector<share*> f_wires = cache->at(input_wires[2]);
+				assert((t_wires.size() == f_wires.size()));
 
-				// t wires
-				auto start = 1;
-				std::vector<std::string> t_strs(len);
-				std::copy(input_wires.begin() + start, input_wires.begin() + len + start, t_strs.begin()); 
-
-				// f wires
-				start += len;
-				std::vector<std::string> f_strs(len);
-				std::copy(input_wires.begin() + start, input_wires.begin() + len + start, f_strs.begin()); 
-
-				for (int i = 0; i < len; i++) {
+				std::vector<share*> res_wires;
+				for (int i = 0; i < t_wires.size(); i++) {
+					auto t_wire = t_wires[i];
+					auto f_wire = f_wires[i];
+					
 					// add conversion gates
-					std::string share_type_1 = share_map->at(t_strs[i]);
-					std::string share_type_2 = share_map->at(f_strs[i]);
+					std::string t_share_type = share_type_cache->at(t_wire);
+					std::string f_share_type = share_type_cache->at(f_wire);
 
-					share* t_wire = cache->at(t_strs[i]);
-					share* f_wire = cache->at(f_strs[i]);
+					t_wire = add_conv_gate(t_share_type, circuit_type, t_wire, party);
+					f_wire = add_conv_gate(f_share_type, circuit_type, f_wire, party);
 
-					t_wire = add_conv_gate(share_type_1, circuit_type, t_wire, party);
-					f_wire = add_conv_gate(share_type_2, circuit_type, f_wire, party);
+					auto res_wire = result = circ->PutMUXGate(t_wire, f_wire, sel);
+					res_wires.push_back(res_wire);
+				}
 
-					result = circ->PutMUXGate(t_wire, f_wire, sel);
-
-					// set result
-					(*cache)[output_wires[i]] = result;
+				// set result
+				(*cache)[output_wires[0]] = res_wires;
+				for (auto wire: res_wires) {
+					(*share_type_cache)[wire] = circuit_type;
 				}
 				break;
 			}
 			case NOT_: {
-				share* wire = cache->at(input_wires[0]);
+				share* wire = cache->at(input_wires[0])[0];
 
 				// add conversion gates
-				std::string share_type = share_map->at(input_wires[0]);
+				std::string share_type = share_type_cache->at(wire);
 				wire = add_conv_gate(share_type, circuit_type, wire, party);
 				
 				result = ((BooleanCircuit *)circ)->PutINVGate(wire);
 
 				for (auto o: output_wires) {
-					(*cache)[o] = result;
+					(*cache)[o] = {result};
 				}
+				(*share_type_cache)[result] = circuit_type;
 				break;
 			}
 			case SHL_: {
-				share* wire = cache->at(input_wires[0]);
+				share* wire = cache->at(input_wires[0])[0];
+				auto share_type_from = share_type_cache->at(wire);
+				wire = add_conv_gate(share_type_from, circuit_type, wire, party);
 				int value = std::stoi(input_wires[1]);
 				result = left_shift(circ, wire, value);
-
 				for (auto o: output_wires) {
-					(*cache)[o] = result;
+					(*cache)[o] = {result};
 				}
+				(*share_type_cache)[result] = circuit_type;
 				break;
 			} 
 			case LSHR_: {
-				share* wire = cache->at(input_wires[0]);
+				share* wire = cache->at(input_wires[0])[0];
+				auto share_type_from = share_type_cache->at(wire);
+				wire = add_conv_gate(share_type_from, circuit_type, wire, party);
 				int value = std::stoi(input_wires[1]);
 				result = logical_right_shift(circ, wire, value);
-
 				for (auto o: output_wires) {
-					(*cache)[o] = result;
+					(*cache)[o] = {result};
 				}
+				(*share_type_cache)[result] = circuit_type;
 				break;
 			} 
+			case SELECT_CONS: {
+				auto array_shares = cache->at(input_wires[0]);
+				auto index = std::stoi(input_wires[1]);
+				assert((index < array_shares.size()));
+				auto select_share = array_shares[index];
+				(*cache)[output_wires[0]] = {select_share};
+				break;
+			}
+			case STORE_CONS: {
+				auto array_shares = cache->at(input_wires[0]);
+				auto index = std::stoi(input_wires[1]);
+				auto value_share = cache->at(input_wires[2])[0];
+				assert((index < array_shares.size()));
+				array_shares[index] = value_share;
+				(*cache)[output_wires[0]] = array_shares;
+				break;
+			}
 			case SELECT_: {
 				assert(("Select circuit type not supported in arithmetic sharing", circuit_type != "a"));
-				auto index = input_wires[input_wires.size()-1];
-				auto index_wire = cache->at(index);
-				index_wire = add_conv_gate(share_map->at(index), circuit_type, index_wire, party);
-
-				// Set result to be the first element in the array
-				share* res = cache->at(input_wires[0]); 
-
-				// iterate through all input wires
-				for (int i = 0; i < input_wires.size() - 1; i++) {
+				auto array_shares = cache->at(input_wires[0]);
+				auto index_wire = cache->at(input_wires[1])[0];
+				index_wire = add_conv_gate(share_type_cache->at(index_wire), circuit_type, index_wire, party);
+				share* res = array_shares[0]; 
+				for (int i = 0; i < array_shares.size(); i++) {
 					share* ind = put_cons32_gate(circ, i);
 					share* sel = circ->PutEQGate(ind, index_wire);
-					auto array_wire = cache->at(input_wires[i]);
-					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
+					auto array_wire = array_shares[i];
+					array_wire = add_conv_gate(share_type_cache->at(array_wire), circuit_type, array_wire, party);
 					res = circ->PutMUXGate(array_wire, res, sel);
 				}
-				assert(("more than one output wire", output_wires.size() == 1));
-				(*cache)[output_wires[0]] = res;
+				(*cache)[output_wires[0]] = {res};
+				(*share_type_cache)[res] = circuit_type;
 				break;
 			}
 			case STORE_: {
 				assert(("Store circuit type not supported in arithmetic sharing", circuit_type != "a"));
-				assert(("len of input wires == len output wires + 2", input_wires.size() == output_wires.size() + 2));
-				auto value = input_wires[input_wires.size()-1];
-				auto value_wire = cache->at(value);
-				value_wire = add_conv_gate(share_map->at(value), circuit_type, value_wire, party);
-				
-				auto index = input_wires[input_wires.size()-2];
-				auto index_wire = cache->at(index);
-				index_wire = add_conv_gate(share_map->at(index), circuit_type, index_wire, party);
-
-				for (int i = 0; i < output_wires.size(); i++) {
+				auto array_shares = cache->at(input_wires[0]);
+				auto index_wire = cache->at(input_wires[1])[0];
+				index_wire = add_conv_gate(share_type_cache->at(index_wire), circuit_type, index_wire, party);
+				auto value_wire = cache->at(input_wires[2])[0];
+				value_wire = add_conv_gate(share_type_cache->at(value_wire), circuit_type, value_wire, party);
+				std::vector<share*> store_shares;
+				for (int i = 0; i < array_shares.size(); i++) {
 					share* ind = put_cons32_gate(circ, i);
 					share* sel = circ->PutEQGate(ind, index_wire);
-					auto array_wire = cache->at(input_wires[i]);
-					array_wire = add_conv_gate(share_map->at(input_wires[i]), circuit_type, array_wire, party);
-					(*cache)[output_wires[i]] = circ->PutMUXGate(value_wire, array_wire, sel);
- 				}
+					auto array_wire = array_shares[i];
+					array_wire = add_conv_gate(share_type_cache->at(array_wire), circuit_type, array_wire, party);
+					array_wire = circ->PutMUXGate(value_wire, array_wire, sel);
+					store_shares.push_back(array_wire);
+					(*share_type_cache)[array_wire] = circuit_type;
+				}
+				(*cache)[output_wires[0]] = store_shares;
+				break;
+			}
+			case FIELD_: {
+				auto tuple_shares = cache->at(input_wires[0]);
+				auto index = std::stoi(input_wires[1]);
+				assert((index < tuple_shares.size()));
+				auto field_share = tuple_shares[index];
+				(*cache)[output_wires[0]] = {field_share};
+				break;
+			}
+			case FIELD_VEC: {
+				auto tuple_shares = cache->at(input_wires[0]);
+				auto offset = std::stoi(input_wires[1]);
+				auto len = std::stoi(input_wires[2]);
+				assert((offset + len - 1 < tuple_shares.size()));
+				std::vector<share*> field_shares;
+				for (int i = 0; i < len; i++) {
+					field_shares.push_back(tuple_shares[offset + i]);
+				}
+				(*cache)[output_wires[0]] = field_shares;
 				break;
 			}
 			case IN_: {
@@ -412,14 +466,10 @@ void process_instruction(
 				// rewire 
 				if (rewire_inputs->size() > 0) {
 					// add conversion gates
-					std::string share_type_from = share_map->at(rewire_inputs->at(0));
-					std::string share_type_to = share_map->at(output_wires[0]);
-					share* rewire_share = cache->at(rewire_inputs->at(0));
-					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
-
-					cache->insert(std::pair<std::string, share*>(output_wires[0], rewire_share));
+					share* rewire_share = rewire_inputs->front();
+					std::string share_type_from = share_type_cache->at(rewire_share);
+					(*cache)[output_wires[0]] = {rewire_share};
 					rewire_inputs->pop_front();
-					result = rewire_share;
 				} else {
 					uint32_t value = params->at(var_name);
 					int vis = std::stoi(input_wires[1]);
@@ -435,29 +485,43 @@ void process_instruction(
 					} else {
 						result = circ->PutDummyINGate(bitlen);
 					} 
+					(*share_type_cache)[result] = circuit_type;
 				}
 
 				for (auto o: output_wires) {
-					(*cache)[o] = result;
+					(*cache)[o] = {result};
 				}
 				break;
 			}
 			case OUT_: {
 				// rewire 
-				if (rewire_outputs->size() > 0) {
-					// add conversion gates
-					std::string share_type_from = share_map->at(input_wires[0]);
-					std::string share_type_to = share_map->at(rewire_outputs->at(0));
-					share* rewire_share = cache->at(input_wires[0]);		
-					rewire_share = add_conv_gate(share_type_from, share_type_to, rewire_share, party);
-					cache->insert(std::pair<std::string, share*>(rewire_outputs->at(0), rewire_share));
-					rewire_outputs->pop_front();
-					result = rewire_share;
+				if (rewire_outputs) {
+					// share* rewire_share = cache->at(input_wires[0])[0];	
+					// (*cache)[rewire_outputs->at(0)].push_back(rewire_share);
+					// result = rewire_share;
+					std::vector<share*> rewire_shares = cache->at(input_wires[0]);	
+					for (auto wire: rewire_shares) {
+						out->push_back(wire);
+					}
+
+					// // add conversion gates
+					// share* rewire_share = cache->at(input_wires[0])[0];		
+					// // std::string share_type_from = share_type_cache->at(rewire_share);
+					// // rewire_share = add_conv_gate(share_type_from, circuit_type, rewire_share, party);
+					// (*cache)[rewire_outputs->at(0)].push_back(rewire_share);
+					// // rewire_outputs->at(0) = rewire_share;
+					// // cache->insert(std::pair<std::string, std::vector<share*>>(rewire_outputs->at(0), {rewire_share}));
+					// result = rewire_share;
+					// // (*share_type_cache)[result] = circuit_type;
 				} else {
-					share* wire = cache->at(input_wires[0]);
-					result = circ->PutOUTGate(wire, ALL);					
+					std::vector<share*> wires = cache->at(input_wires[0]);
+					for (auto wire: wires) {
+						std::string share_type_from = share_type_cache->at(wire);
+						wire = add_conv_gate(share_type_from, circuit_type, wire, party);
+						result = circ->PutOUTGate(wire, ALL);		
+						out->push_back(result);			
+					}
 				}
-				out->push_back(result);
 				break;
 			}
 			default: {
@@ -472,10 +536,11 @@ void process_instruction(
 std::vector<share*> process_bytecode(
 	std::string fn, 
 	std::unordered_map<std::string, std::string>* bytecode_paths,
-	std::unordered_map<std::string, share*>* cache,
+	std::unordered_map<std::string, std::vector<share*>>* cache,
 	std::unordered_map<std::string, uint32_t>* const_cache,
-	std::deque<std::string> rewire_inputs,
-	std::deque<std::string> rewire_outputs,
+	std::unordered_map<share*, std::string>* share_type_cache, 
+	std::deque<share*> rewire_inputs,
+	bool rewire_outputs,
 	std::unordered_map<std::string, uint32_t>* params,
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role,
@@ -493,7 +558,7 @@ std::vector<share*> process_bytecode(
 	std::string str;
 	while (std::getline(file, str)) {
         std::vector<std::string> line = split_(str);
-		// std::cout << "line: "  << str << std::endl;
+		// std::cout << "line: " << str << std::endl;
 		if (line.size() < 4) continue;
 		int num_inputs = std::stoi(line[0]);
 		int num_outputs = std::stoi(line[1]);
@@ -528,24 +593,22 @@ std::vector<share*> process_bytecode(
 
 		if (parse_call_op(op)) {
 			auto fn =  parse_fn_name(op);
-
 			// input and output wires are concatenated into a vector and then used for 
 			// rewiring the input and output wires of the function
-			std::deque<std::string> rewire_inputs;
-			std::deque<std::string> rewire_outputs;
+			std::deque<share*> rewire_inputs;
 
-			rewire_inputs.insert(rewire_inputs.end(), input_wires.begin(), input_wires.end());
-			rewire_outputs.insert(rewire_outputs.end(), output_wires.begin(), output_wires.end());
+			for (auto i: input_wires) {
+				auto wires = cache->at(i);
+				rewire_inputs.insert(rewire_inputs.end(), wires.begin(), wires.end());
+			}
 
 			// recursively call process bytecode on function body
-			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, const_cache, rewire_inputs, rewire_outputs, params, share_map, role, bitlen, party);	
+			std::vector<share*> out_shares = process_bytecode(fn, bytecode_paths, cache, const_cache, share_type_cache, rewire_inputs, true, params, share_map, role, bitlen, party);	
 
 			assert(("Out_shares and output_wires are the same size", out_shares.size() == output_wires.size()));
-			for (int i = 0; i < out_shares.size(); i++) {
-				(*cache)[output_wires[i]] = out_shares[i];
-			}
+			(*cache)[output_wires[0]] = out_shares;
 		} else {
-			process_instruction(circuit_type, cache, const_cache, &rewire_inputs, &rewire_outputs, params, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
+			process_instruction(circuit_type, cache, const_cache, share_type_cache, &rewire_inputs, rewire_outputs, params, input_wires, output_wires, &out, op, role, bitlen, party);
 			assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
 		}
 	}
@@ -554,8 +617,9 @@ std::vector<share*> process_bytecode(
 }
 
 void process_const(
-	std::unordered_map<std::string, share*>* cache,
+	std::unordered_map<std::string, std::vector<share*>>* cache,
 	std::unordered_map<std::string, uint32_t>* const_cache,
+	std::unordered_map<share*, std::string>* share_type_cache, 
 	std::string const_path, 
 	std::unordered_map<std::string, std::string>* share_map,
 	e_role role,
@@ -593,7 +657,7 @@ void process_const(
 			circuit_type = share_map->at(input_wires[0]);
 		}
 
-		process_instruction(circuit_type, cache, const_cache, {}, {}, {}, share_map, input_wires, output_wires, &out, op, role, bitlen, party);
+		process_instruction(circuit_type, cache, const_cache, share_type_cache, {}, {}, {}, input_wires, output_wires, &out, op, role, bitlen, party);
 		assert(("Len of output_wires should be at most 1", output_wires.size() <= 1));
 	}
 }
@@ -617,20 +681,21 @@ double test_aby_test_circuit(
 	output_queue out_q;
 
 	// share cache
-	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
+	std::unordered_map<std::string, std::vector<share*>>* cache = new std::unordered_map<std::string, std::vector<share*>>();
 	std::unordered_map<std::string, uint32_t>* const_cache = new std::unordered_map<std::string, uint32_t>();
+	std::unordered_map<share*, std::string>* share_type_cache = new std::unordered_map<share*, std::string>();
 
 	// process consts 
-	process_const(cache, const_cache, const_path, share_map, role, bitlen, party);
+	process_const(cache, const_cache, share_type_cache, const_path, share_map, role, bitlen, party);
 
 	// process bytecode
-	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, const_cache, {}, {}, params, share_map, role, bitlen, party);	
+	vector<share*> out_shares = process_bytecode("main", bytecode_paths, cache, const_cache, share_type_cache, {}, {}, params, share_map, role, bitlen, party);	
 
 	// multiple outputs
 	for (auto s: out_shares) {
 		add_to_output_queue(out_q, s, role, std::cout);
 	}
-	
+
 	// add timing code
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
