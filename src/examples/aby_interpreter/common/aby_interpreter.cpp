@@ -496,23 +496,10 @@ void process_instruction(
 			case OUT_: {
 				// rewire 
 				if (rewire_outputs) {
-					// share* rewire_share = cache->at(input_wires[0])[0];	
-					// (*cache)[rewire_outputs->at(0)].push_back(rewire_share);
-					// result = rewire_share;
 					std::vector<share*> rewire_shares = cache->at(input_wires[0]);	
 					for (auto wire: rewire_shares) {
 						out->push_back(wire);
 					}
-
-					// // add conversion gates
-					// share* rewire_share = cache->at(input_wires[0])[0];		
-					// // std::string share_type_from = share_type_cache->at(rewire_share);
-					// // rewire_share = add_conv_gate(share_type_from, circuit_type, rewire_share, party);
-					// (*cache)[rewire_outputs->at(0)].push_back(rewire_share);
-					// // rewire_outputs->at(0) = rewire_share;
-					// // cache->insert(std::pair<std::string, std::vector<share*>>(rewire_outputs->at(0), {rewire_share}));
-					// result = rewire_share;
-					// // (*share_type_cache)[result] = circuit_type;
 				} else {
 					std::vector<share*> wires = cache->at(input_wires[0]);
 					for (auto wire: wires) {
