@@ -175,10 +175,11 @@ void process_instruction(
 	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
 	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 
-	Circuit* circ = get_circuit(circuit_type, party);
 	share* result;
 
-	if (is_bin_op(op_hash(op))) {		
+	if (is_bin_op(op_hash(op))) {
+		Circuit* circ = get_circuit(circuit_type, party);
+
 		share* wire1 = cache->at(input_wires[0])[0];
 		share* wire2 = cache->at(input_wires[1])[0];
 
@@ -315,6 +316,7 @@ void process_instruction(
 				break;
 			}
 			case MUX_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				// sel 
 				share* sel = cache->at(input_wires[0])[0];
 				std::string share_type_sel = share_type_cache->at(sel);
@@ -348,6 +350,7 @@ void process_instruction(
 				break;
 			}
 			case NOT_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0])[0];
 
 				// add conversion gates
@@ -363,6 +366,7 @@ void process_instruction(
 				break;
 			}
 			case SHL_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0])[0];
 				auto share_type_from = share_type_cache->at(wire);
 				wire = add_conv_gate(share_type_from, circuit_type, wire, party);
@@ -375,6 +379,7 @@ void process_instruction(
 				break;
 			} 
 			case LSHR_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0])[0];
 				auto share_type_from = share_type_cache->at(wire);
 				wire = add_conv_gate(share_type_from, circuit_type, wire, party);
@@ -404,6 +409,7 @@ void process_instruction(
 				break;
 			}
 			case SELECT_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				assert(("Select circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				auto array_shares = cache->at(input_wires[0]);
 				auto index_wire = cache->at(input_wires[1])[0];
@@ -421,6 +427,7 @@ void process_instruction(
 				break;
 			}
 			case STORE_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				assert(("Store circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				auto array_shares = cache->at(input_wires[0]);
 				auto index_wire = cache->at(input_wires[1])[0];
@@ -461,6 +468,7 @@ void process_instruction(
 				break;
 			}
 			case IN_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				std::string var_name = input_wires[0];
 			
 				// rewire 
@@ -495,6 +503,7 @@ void process_instruction(
 			}
 			case OUT_: {
 				// rewire 
+				Circuit* circ = get_circuit(circuit_type, party);
 				if (rewire_outputs) {
 					std::vector<share*> rewire_shares = cache->at(input_wires[0]);	
 					for (auto wire: rewire_shares) {
