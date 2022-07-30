@@ -38,6 +38,7 @@ enum op {
 	STORE_CONS,
 	FIELD_, 
 	FIELD_VEC, 
+	TUPLE_,
 	IN_,
 	OUT_,
 	CALL_,
@@ -78,6 +79,7 @@ op op_hash(std::string o) {
 	if (o == "STORE_CONS") return STORE_CONS;
 	if (o == "FIELD") return FIELD_;
 	if (o == "FIELD_VEC") return FIELD_VEC;
+	if (o == "TUPLE") return TUPLE_;
 	if (parse_call_op(o)) return CALL_;
     throw std::invalid_argument("Unknown operator: "+o);
 }
@@ -465,6 +467,17 @@ void process_instruction(
 					field_shares.push_back(tuple_shares[offset + i]);
 				}
 				(*cache)[output_wires[0]] = field_shares;
+				break;
+			}
+			case TUPLE_: {
+				std::vector<share*> tuple_shares;
+				for (int i = 0; i < input_wires.size(); i++) {
+					auto field_shares = cache->at(input_wires[i]);
+					for (auto f: field_shares) {
+						tuple_shares.push_back(f);
+					}
+				}
+				(*cache)[output_wires[0]] = tuple_shares;
 				break;
 			}
 			case IN_: {
