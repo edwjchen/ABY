@@ -73,7 +73,7 @@ std::unordered_map<std::string, uint32_t> parse_mpc_inputs(std::string test_path
 
 int main(int argc, char** argv) {
     // add timing code
-	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
+	high_resolution_clock::time_point start_total_time = high_resolution_clock::now();
 
 	e_role role; 
 	uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
@@ -108,13 +108,14 @@ int main(int argc, char** argv) {
         }
         break;
     }
-	test_aby_test_circuit(bytecode_path, &params, &share_map, role, address, port, seclvl, 32,
+	double exec_time = test_aby_test_circuit(bytecode_path, &params, &share_map, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
 
     // add timing code
-    high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
-	duration<double> exec_time = duration_cast<duration<double>>(end_exec_time - start_exec_time);
-	std::cout << "LOG: " << (role == SERVER ? "Server total time: " : "Client total time: ") << exec_time.count() << std::endl;
+    high_resolution_clock::time_point end_total_time = high_resolution_clock::now();
+	duration<double> total_time = duration_cast<duration<double>>(end_total_time - start_total_time);
+    std::cout << "LOG: " << (role == SERVER ? "Server load time: " : "Client load time: ") << total_time.count() - exec_time << std::endl;
+	std::cout << "LOG: " << (role == SERVER ? "Server total time: " : "Client total time: ") << total_time.count() << std::endl;
 
 	return 0;
 }

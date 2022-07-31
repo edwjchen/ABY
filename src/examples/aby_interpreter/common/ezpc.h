@@ -60,7 +60,7 @@ share* left_shift(Circuit* c, share* val, uint32_t shift_factor) {
   share* fresh_zero_share = put_cons32_gate(c, 0);
   std::vector<uint32_t> val_wires = val->get_wires();
   if(share_wire_count == 1){
-    cout<<"Error. Share not padded. A share cannot exist with just 1 wire.\n";
+    cout<<"LOG: Error. Share not padded. A share cannot exist with just 1 wire.\n";
   }
   // Note here the assumption is that if we receive the val share as a share of size 32, we output the share as a share of size 32 only and drop the MSBs which overflow the 32 bit constraint.
   for(int i=0; i+shift_factor<share_wire_count; i++){

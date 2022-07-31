@@ -26,6 +26,8 @@ enum op {
 	CONS_bool,
 	MUX_, 
 	NOT_,
+	SHL_,
+	LSHR_,
 	DIV_,
 	IN_,
 	OUT_,
@@ -49,6 +51,8 @@ op op_hash(std::string o) {
 	if (o == "MUX") return MUX_;
 	if (o == "NOT") return NOT_;
 	if (o == "DIV") return DIV_;
+	if (o == "SHL") return SHL_;
+	if (o == "LSHR") return LSHR_;
 	if (o == "IN") return IN_;
 	if (o == "OUT") return OUT_;
     throw std::invalid_argument("Unknown operator: "+o);
@@ -113,29 +117,6 @@ share* add_conv_gate(
 		return wire;
 	}
 }
-
-// void process_input(
-// 	std::unordered_map<std::string, share*>* cache,
-// 	std::unordered_map<std::string, uint32_t>* params,
-// 	std::unordered_map<std::string, std::string>* share_map,
-// 	e_role role,
-// 	uint32_t bitlen,
-// 	ABYParty* party) {
-// 	for (auto p: *params) {
-// 		std::string param_name = p.first;
-// 		uint32_t param_value = (p.second);
-// 		std::string circuit_type = get(share_map, std::to_string(param_index));
-// 		Circuit* circ = get_circuit(circuit_type, party);
-// 		share* param_share;
-// 		if (param_role == role_str) {
-// 			param_share = circ->PutINGate(param_value, bitlen, role);
-// 		} else {
-// 			param_share = circ->PutDummyINGate(bitlen);
-// 		}
-// 		(*cache)[std::to_string(param_index)] = param_share;
-// 	}
-// }
-
 
 share* process_instruction(
 	std::string circuit_type,
@@ -271,6 +252,18 @@ share* process_instruction(
 				result = ((BooleanCircuit *)circ)->PutINVGate(wire);
 				break;
 			}
+			case SHL_: {
+				share* wire = cache->at(input_wires[0]);
+				int value = std::stoi(input_wires[1]);
+				result = left_shift(circ, wire, value);
+				break;
+			} 
+			case LSHR_: {
+				share* wire = cache->at(input_wires[0]);
+				int value = std::stoi(input_wires[1]);
+				result = logical_right_shift(circ, wire, value);
+				break;
+			} 
 			case IN_: {
 				std::string var_name = input_wires[0];
 				uint32_t value = params->at(var_name);
@@ -359,7 +352,7 @@ share* process_bytecode(
 	return last_instr;
 }
 
-int32_t test_aby_test_circuit(
+double test_aby_test_circuit(
 	std::string bytecode_path, 
 	std::unordered_map<std::string, uint32_t>* params, 
 	std::unordered_map<std::string, std::string>* share_map,
@@ -394,5 +387,5 @@ int32_t test_aby_test_circuit(
 	flush_output_queue(out_q, role, bitlen);
 	delete cache;
 	delete party;
-	return 0;
+	return exec_time.count();
 }
