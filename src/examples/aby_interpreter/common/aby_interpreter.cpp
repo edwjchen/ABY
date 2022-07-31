@@ -481,6 +481,9 @@ void process_instruction(
 				break;
 			}
 			case IN_: {
+				if (circuit_type == "y") {
+					circuit_type = "b";
+				}
 				Circuit* circ = get_circuit(circuit_type, party);
 				std::string var_name = input_wires[0];
 			
