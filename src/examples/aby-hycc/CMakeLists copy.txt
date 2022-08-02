@@ -1,3 +1,0 @@
-
-add_executable(aby_hycc aby_hy.cpp common/aby_interpreter.cpp)
-target_link_libraries(aby_hycc ABY::aby ENCRYPTO_utils::encrypto_utils)
