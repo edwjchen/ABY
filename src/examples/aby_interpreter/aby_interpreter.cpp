@@ -97,6 +97,7 @@ std::unordered_map<std::string, uint32_t> parse_mpc_inputs(std::string test_path
     uint32_t num_params = 0;
     while (std::getline(file, str)) {
         std::vector<std::string> line = split(str, " ");
+        if (line.size() == 0) continue;
         std::string key_ = line[0];
         if (key_ == "res") continue;
 
@@ -147,8 +148,10 @@ int main(int argc, char** argv) {
     std::unordered_map<std::string, std::string> share_map;
     std::unordered_map<std::string, std::string> bytecode_paths;
 
+
     auto share_map_path = get_path(path, "_share_map.txt");
     auto const_path = get_path(path, "_const.txt");
+
 
 	switch(hash_mode(m)) {
         case mpc: {
