@@ -494,6 +494,7 @@ void process_instruction(
 					std::string share_type_from = share_type_cache->at(rewire_share);
 					(*cache)[output_wires[0]] = {rewire_share};
 					rewire_inputs->pop_front();
+					break;
 				} else {
 					uint32_t value = params->at(var_name);
 					int vis = std::stoi(input_wires[1]);
