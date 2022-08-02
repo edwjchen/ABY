@@ -14,6 +14,3 @@ add_subdirectory(threshold_euclidean_dist_2d_simd)
 add_subdirectory(uc_circuit)
 add_subdirectory(simd)
 add_subdirectory(aby_interpreter)
-add_subdirectory(aby-hycc)
-
-
