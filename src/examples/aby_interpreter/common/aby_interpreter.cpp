@@ -165,10 +165,10 @@ void process_instruction(
 	Circuit* bcirc = sharings[S_BOOL]->GetCircuitBuildRoutine();
 	Circuit* ycirc = sharings[S_YAO]->GetCircuitBuildRoutine();
 
-	Circuit* circ = get_circuit(circuit_type, party);
 	share* result;
 
-	if (is_bin_op(op_hash(op))) {		
+	if (is_bin_op(op_hash(op))) {	
+		Circuit* circ = get_circuit(circuit_type, party);	
 		share* wire1 = cache->at(input_wires[0]);
 		share* wire2 = cache->at(input_wires[1]);
 
@@ -295,7 +295,7 @@ void process_instruction(
 			}
 			case MUX_: {
 				assert(("input_wires len is not odd", input_wires.size() % 2 == 1));
-
+				Circuit* circ = get_circuit(circuit_type, party);
 				// sel 
 				share* sel = cache->at(input_wires[0]);
 				std::string share_type_sel = share_map->at(input_wires[0]);
@@ -332,8 +332,8 @@ void process_instruction(
 				break;
 			}
 			case NOT_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0]);
-
 				// add conversion gates
 				std::string share_type = share_map->at(input_wires[0]);
 				wire = add_conv_gate(share_type, circuit_type, wire, party);
@@ -346,6 +346,7 @@ void process_instruction(
 				break;
 			}
 			case SHL_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0]);
 				int value = std::stoi(input_wires[1]);
 				result = left_shift(circ, wire, value);
@@ -356,6 +357,7 @@ void process_instruction(
 				break;
 			} 
 			case LSHR_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				share* wire = cache->at(input_wires[0]);
 				int value = std::stoi(input_wires[1]);
 				result = logical_right_shift(circ, wire, value);
@@ -366,6 +368,7 @@ void process_instruction(
 				break;
 			} 
 			case SELECT_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				assert(("Select circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				auto index = input_wires[input_wires.size()-1];
 				auto index_wire = cache->at(index);
@@ -387,6 +390,7 @@ void process_instruction(
 				break;
 			}
 			case STORE_: {
+				Circuit* circ = get_circuit(circuit_type, party);
 				assert(("Store circuit type not supported in arithmetic sharing", circuit_type != "a"));
 				assert(("len of input wires == len output wires + 2", input_wires.size() == output_wires.size() + 2));
 				auto value = input_wires[input_wires.size()-1];
@@ -407,6 +411,10 @@ void process_instruction(
 				break;
 			}
 			case IN_: {
+				if (circuit_type == "y") {
+					circuit_type = "b";
+				}
+				Circuit* circ = get_circuit(circuit_type, party);
 				std::string var_name = input_wires[0];
 			
 				// rewire 
@@ -420,6 +428,7 @@ void process_instruction(
 					cache->insert(std::pair<std::string, share*>(output_wires[0], rewire_share));
 					rewire_inputs->pop_front();
 					result = rewire_share;
+					break;
 				} else {
 					uint32_t value = params->at(var_name);
 					int vis = std::stoi(input_wires[1]);
@@ -454,6 +463,7 @@ void process_instruction(
 					rewire_outputs->pop_front();
 					result = rewire_share;
 				} else {
+					Circuit* circ = get_circuit(circuit_type, party);
 					share* wire = cache->at(input_wires[0]);
 					result = circ->PutOUTGate(wire, ALL);					
 				}
@@ -619,6 +629,7 @@ double test_aby_test_circuit(
 	// share cache
 	std::unordered_map<std::string, share*>* cache = new std::unordered_map<std::string, share*>();
 	std::unordered_map<std::string, uint32_t>* const_cache = new std::unordered_map<std::string, uint32_t>();
+	std::unordered_map<share*, std::string>* share_type_cache = new std::unordered_map<share*, std::string>();
 
 	// process consts 
 	process_const(cache, const_cache, const_path, share_map, role, bitlen, party);

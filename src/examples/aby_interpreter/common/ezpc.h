@@ -335,7 +335,7 @@ share* fastLongDivision(Circuit* c, share* x, share* y, uint32_t getQuotient){
     rem.push_back(put_cons1_gate(c, (uint64_t)0));
     bvx.push_back(x->get_wire_ids_as_share(i));
     bvy.push_back(y->get_wire_ids_as_share(i));
-    bits_set.push_back(x->get_wire_ids_as_share(i));
+    bits_set.push_back(y->get_wire_ids_as_share(i));
   }
 
   // assign or
