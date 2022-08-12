@@ -375,15 +375,20 @@ void process_instruction(
 				for (int i = 0; i < len; i++) {
 					auto t_wire = cache->at(t_strs[i])[0];
 					auto f_wire = cache->at(f_strs[i])[0];
-					
-					// add conversion gates
-					std::string t_share_type = share_type_cache->at(t_wire);
-					std::string f_share_type = share_type_cache->at(f_wire);
-				
-					t_wire = add_conv_gate(t_share_type, circuit_type, t_wire, party);
-					f_wire = add_conv_gate(f_share_type, circuit_type, f_wire, party);
 
-					result = circ->PutMUXGate(t_wire, f_wire, sel);
+					if (t_wire == f_wire){
+						result = t_wire;
+					} else{
+						// add conversion gates
+						std::string t_share_type = share_type_cache->at(t_wire);
+						std::string f_share_type = share_type_cache->at(f_wire);
+					
+						t_wire = add_conv_gate(t_share_type, circuit_type, t_wire, party);
+						f_wire = add_conv_gate(f_share_type, circuit_type, f_wire, party);
+
+						result = circ->PutMUXGate(t_wire, f_wire, sel);
+					}
+					
 					(*cache)[output_wires[i]] = {result};
 					(*share_type_cache)[result] = circuit_type;
 				}
@@ -729,7 +734,6 @@ double test_aby_test_circuit(
 	}
 	
 	// add timing code
-	// std::cout << "Start Exec .." << std::endl;
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
 	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
