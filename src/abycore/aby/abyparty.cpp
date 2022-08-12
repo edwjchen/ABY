@@ -508,9 +508,12 @@ void ABYParty::PrintPerformanceStatistics() {
 	// m_vSharings[S_ARITH]->PrintPerformanceStatistics();
 	// m_vSharings[S_SPLUT]->PrintPerformanceStatistics();
 	// std::cout << "Total number of gates: " << m_pCircuit->GetGateHead() << " Total depth: " << m_pCircuit->GetTotalDepth() << std::endl;
+	std::cout << "LOG: Total number of gates: " << m_pCircuit->GetGateHead() << std::endl;
+	std::cout << "LOG: Total depth: " << m_pCircuit->GetTotalDepth() << std::endl;
 	PrintTimings();
 	// std::cout << std::endl;
 }
+
 
 void ABYParty::bench_aes() const {
 	timespec bench_start, bench_end;
