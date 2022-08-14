@@ -24,57 +24,155 @@
 #include "../aes/common/aescircuit.h"
 //ABY Party class
 #include "../../abycore/aby/abyparty.h"
+#include "ezpc.h"
 #include <cstring>
 
-static const uint32_t m_vBitLens[] = {1, 8, 16, 32, 64};
+static const uint32_t m_vBitLens[] = {1, 8, 16, 32};
 
 static const aby_ops_t m_tBenchOps[] = {
-	{ OP_XOR, S_BOOL, "xorbool" },
-	{ OP_AND, S_BOOL, "andbool" },
+	// base
+	{ OP_BASE, S_ARITH, "base_a" },
+	{ OP_BASE, S_BOOL, "base_b" },
+	{ OP_BASE, S_YAO, "base_y" },
+
+	// add
+	{ OP_ADD, S_ARITH, "add_a" },
+	{ OP_ADD, S_BOOL, "add_b" },
+	{ OP_ADD, S_YAO, "add_y" },
+
+	// and
+	{ OP_AND, S_BOOL, "and_b" },
+	{ OP_AND, S_YAO, "and_y" },
+
+	// eq
+	{ OP_EQ, S_BOOL, "eq_b" },
+	{ OP_EQ, S_YAO, "eq_y" },
+
+	// ge
+	{ OP_GE, S_BOOL, "ge_b" },
+	{ OP_GE, S_YAO, "ge_y" },
+
+	// gt
+	{ OP_GT, S_BOOL, "gt_b" },
+	{ OP_GT, S_YAO, "gt_y" },
+
+	// le
+	{ OP_LE, S_BOOL, "le_b" },
+	{ OP_LE, S_YAO, "le_y" },
+
+	// lt
+	{ OP_LT, S_BOOL, "lt_b" },
+	{ OP_LT, S_YAO, "lt_y" },
+
+	// mul
+	{ OP_MUL, S_ARITH, "mul_a" },
+	{ OP_MUL, S_BOOL, "mul_b" },
+	{ OP_MUL, S_YAO, "mul_y" },
+
+	// mux
+	{ OP_MUX, S_BOOL, "mux_b" },
+	{ OP_MUX, S_YAO, "mux_y" },
+
+	// ne
+	{ OP_NEQ, S_BOOL, "ne_b" },
+	{ OP_NEQ, S_YAO, "ne_y" },
+
+	// or
+	{ OP_OR, S_BOOL, "or_b" },
+	{ OP_OR, S_YAO, "or_y" },
+
+	// xor
+	{ OP_XOR, S_BOOL, "xor_b" },
+	{ OP_XOR, S_YAO, "xor_y" },
+
+	// sub
+	{ OP_SUB, S_ARITH, "sub_a" },
+	{ OP_SUB, S_BOOL, "sub_b" },
+	{ OP_SUB, S_YAO, "sub_y" },
+
+	// div
+	{ OP_DIV, S_BOOL, "div_b" },
+	{ OP_DIV, S_YAO, "div_y" },
+
+	// rem
+	{ OP_REM, S_BOOL, "rem_b" },
+	{ OP_REM, S_YAO, "rem_y" },
+
+	{ OP_A2B, S_ARITH, "a2b" },
+	{ OP_A2Y, S_ARITH, "a2y" },
+	
+	{ OP_B2A, S_BOOL, "b2a" },
+	{ OP_B2Y, S_BOOL, "b2y" },
+
+	{ OP_Y2A, S_YAO, "y2a" },
+	{ OP_Y2B, S_YAO, "y2b" },
+
+	{ OP_INV, S_BOOL, "inv_b" },
+	{ OP_INV, S_YAO, "inv_y" },
+
+	{ OP_ADD, S_BOOL, "adddovecbool" },
 	{ OP_ADD, S_BOOL, "addsobool" },
 	{ OP_ADD, S_BOOL, "adddobool" },
 
-	{ OP_ADD, S_BOOL, "adddovecbool" },
+	{ OP_CMP, S_YAO, "cmpyao" },
+	{ OP_CMP, S_BOOL, "cmpdobool" },
+	{ OP_CMP, S_BOOL, "cmpsobool" },
+
 	{ OP_MUL, S_BOOL, "mulsobool" },
-	{ OP_MUL, S_BOOL, "muldobool" },
 	{ OP_MUL, S_BOOL, "mulsovecbool" },
 	{ OP_MUL, S_BOOL, "muldovecbool" },
+	{ OP_MUL, S_BOOL, "muldobool" },
 
-	{ OP_CMP, S_BOOL, "cmpsobool" },
-	{ OP_CMP, S_BOOL, "cmpdobool" },
-	{ OP_EQ, S_BOOL, "eqbool" },
-	{ OP_MUX, S_BOOL, "muxbool" },
 	{ OP_MUX, S_BOOL, "muxvecbool" },
-	{ OP_INV, S_BOOL, "invbool" },
+	
 
-	{ OP_SBOX, S_BOOL, "sboxsobool" },
-	{ OP_SBOX, S_BOOL, "sboxdobool" },
-	{ OP_SBOX, S_BOOL, "sboxdovecbool" },
 
-	{ OP_XOR, S_YAO, "xoryao" },
-	{ OP_AND, S_YAO, "andyao" },
-	{ OP_ADD, S_YAO, "addyao" },
-	{ OP_MUL, S_YAO, "mulyao" },
-	{ OP_CMP, S_YAO, "cmpyao" },
+	// { OP_XOR, S_BOOL, "xorbool" },
+	// { OP_AND, S_BOOL, "andbool" },
+	// { OP_ADD, S_BOOL, "addsobool" },
+	// { OP_ADD, S_BOOL, "adddobool" },
 
-	{ OP_EQ, S_YAO, "eqyao" },
-	{ OP_MUX, S_YAO, "muxyao" },
-	{ OP_INV, S_YAO, "invyao" },
-	{ OP_SBOX, S_YAO, "sboxsoyao" },
-	{ OP_ADD, S_ARITH, "addarith" },
-	{ OP_MUL, S_ARITH, "mularith" },
-	{ OP_Y2B, S_YAO, "y2b" },
-	{ OP_B2A, S_BOOL, "b2a" },
+	// { OP_ADD, S_BOOL, "adddovecbool" },
+	// { OP_MUL, S_BOOL, "mulsobool" },
+	// { OP_MUL, S_BOOL, "muldobool" },
+	// { OP_MUL, S_BOOL, "mulsovecbool" },
+	// { OP_MUL, S_BOOL, "muldovecbool" },
 
-	{ OP_B2Y, S_BOOL, "b2y" },
-	{ OP_A2Y, S_ARITH, "a2y" },
-	{ OP_ADD, S_YAO_REV, "addyaoipp" },
-	{ OP_MUL, S_YAO_REV, "mulyaoipp" },
+	// { OP_CMP, S_BOOL, "cmpsobool" },
+	// { OP_CMP, S_BOOL, "cmpdobool" },
+	// { OP_EQ, S_BOOL, "eqbool" },
+	// { OP_MUX, S_BOOL, "muxbool" },
+	// { OP_MUX, S_BOOL, "muxvecbool" },
+	// { OP_INV, S_BOOL, "invbool" },
 
-	{ OP_ADD, S_SPLUT, "addsplut"},
-	{ OP_CMP, S_SPLUT, "cmpsplut"},
-	{ OP_EQ, S_SPLUT, "eqsplut"},
-	{ OP_SBOX, S_SPLUT, "sboxlut" }
+	// { OP_SBOX, S_BOOL, "sboxsobool" },
+	// { OP_SBOX, S_BOOL, "sboxdobool" },
+	// { OP_SBOX, S_BOOL, "sboxdovecbool" },
+
+	// { OP_XOR, S_YAO, "xoryao" },
+	// { OP_AND, S_YAO, "andyao" },
+	// { OP_ADD, S_YAO, "addyao" },
+	// { OP_MUL, S_YAO, "mulyao" },
+	// { OP_CMP, S_YAO, "cmpyao" },
+
+	// { OP_EQ, S_YAO, "eqyao" },
+	// { OP_MUX, S_YAO, "muxyao" },
+	// { OP_INV, S_YAO, "invyao" },
+	// { OP_SBOX, S_YAO, "sboxsoyao" },
+	// { OP_ADD, S_ARITH, "addarith" },
+	// { OP_MUL, S_ARITH, "mularith" },
+	// { OP_Y2B, S_YAO, "y2b" },
+	// { OP_B2A, S_BOOL, "b2a" },
+
+	// { OP_B2Y, S_BOOL, "b2y" },
+	// { OP_A2Y, S_ARITH, "a2y" },
+	// { OP_ADD, S_YAO_REV, "addyaoipp" },
+	// { OP_MUL, S_YAO_REV, "mulyaoipp" },
+
+	// { OP_ADD, S_SPLUT, "addsplut"},
+	// { OP_CMP, S_SPLUT, "cmpsplut"},
+	// { OP_EQ, S_SPLUT, "eqsplut"},
+	// { OP_SBOX, S_SPLUT, "sboxlut" }
 };
 
 int32_t read_test_options(int32_t* argcp, char*** argvp, e_role* role, int32_t* bitlen, uint32_t* secparam,
@@ -244,6 +342,11 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 
 
 				switch (bench_ops[i].op) {
+				case OP_BASE:
+					shrres = shra;
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j];
+					break;
 				case OP_ADD:
 					if(bench_ops[i].opname.compare("addsobool") == 0) {
 						shrres = new boolshare(((BooleanCircuit*)circ)->PutSizeOptimizedAddGate(shra->get_wires(), shrb->get_wires()), circ);
@@ -296,6 +399,11 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j] ^ bvec[j];
 					break;
+				case OP_OR:
+					shrres = ((BooleanCircuit *)circ)->PutINVGate(circ->PutANDGate(((BooleanCircuit *)circ)->PutINVGate(shra), ((BooleanCircuit *)circ)->PutINVGate(shrb)));
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] || bvec[j];
+					break;
 				case OP_AND:
 					shrres = circ->PutANDGate(shra, shrb);
 					for (uint32_t j = 0; j < nvals; j++)
@@ -316,6 +424,42 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j] == bvec[j];
 					break;
+				case OP_NEQ:
+					shrres = ((BooleanCircuit *)circ)->PutINVGate(circ->PutEQGate(shra, shrb));
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] == bvec[j];
+					break;
+				case OP_GE:
+					shrres = ((BooleanCircuit *)circ)->PutINVGate(circ->PutGTGate(shrb, shra));
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] >= bvec[j];
+					break;
+				case OP_GT:
+					shrres = circ->PutGTGate(shra, shrb);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] > bvec[j];
+					break;
+				case OP_LE:
+					shrres = ((BooleanCircuit *)circ)->PutINVGate(circ->PutGTGate(shra, shrb));
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] <= bvec[j];
+					break;
+				case OP_LT:
+					shrres = circ->PutGTGate(shrb, shra);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] < bvec[j];
+					break;
+
+				case OP_REM:
+					shrres = signedmodbl(circ, shrb, shra);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j];
+					break;
+				case OP_DIV:
+					shrres = signeddivbl(circ, shrb, shra);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j];
+					break;
 				case OP_MUX:
 					shrsel = new boolshare(1, circ);
 					shrsel->set_wire_id(0, circ->PutXORGate(shra->get_wire_ids_as_share(0), shrb->get_wire_ids_as_share(0))->get_wire_id(0));
@@ -331,6 +475,13 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					}
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = ((avec[j] & 0x01) ^ (bvec[j] & 0x01)) == 0 ? bvec[j] : avec[j];
+					break;
+				case OP_Y2A:
+					shrres = circ->PutXORGate(shra, shrb);
+					circ = bc;
+					shrres = ac->PutY2AGate(shrres, bc);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] ^ bvec[j];
 					break;
 				case OP_Y2B:
 					shrres = circ->PutXORGate(shra, shrb);
@@ -357,6 +508,12 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					shrres = circ->PutADDGate(shra, shrb);
 					circ = yc;
 					shrres = circ->PutA2YGate(shrres);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = (avec[j] + bvec[j]) & typebitmask;
+					break;
+				case OP_A2B:
+					shrres = circ->PutADDGate(shra, shrb);
+					shrres = bc->PutA2BGate(shrres, yc);
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = (avec[j] + bvec[j]) & typebitmask;
 					break;
@@ -428,7 +585,8 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 				}
 
 
-				op_time += party->GetTiming(P_ONLINE) + party->GetTiming(P_SETUP);
+				// op_time += party->GetTiming(P_ONLINE) + party->GetTiming(P_SETUP);
+				op_time += party->GetTiming(P_ONLINE);
 				o_time += party->GetTiming(P_ONLINE);
 				s_time += party->GetTiming(P_SETUP);
 				o_comm += party->GetSentData(P_ONLINE)+party->GetReceivedData(P_ONLINE);

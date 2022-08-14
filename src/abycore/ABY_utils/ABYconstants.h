@@ -30,7 +30,7 @@
 //#define DEBUGCOMM
 #define DEBUGABYPARTY 0
 
-#define PRINT_PERFORMANCE_STATS 1 //prints overall runtime statistics and gate counts
+#define PRINT_PERFORMANCE_STATS 0 //prints overall runtime statistics and gate counts
 #define PRINT_COMMUNICATION_STATS 0 //prints communication statistics
 #define BENCHONLINEPHASE 0 //show very detailed runtime statistic on each sharing for online phase, typically for troubleshooting
 
@@ -165,6 +165,17 @@ enum e_operation {
 	OP_YSWITCH, /**< Enum for transferring roles in YAO sharing */
 	OP_IO, /**< Enum for performing a SHARING followed by a RECONSTRUCT operation */
 	OP_SBOX, /**< Enum for evaluating the AES S-box on an 8-bit input*/
+
+	OP_GE,
+	OP_GT,
+	OP_LE,
+	OP_LT,
+	OP_NEQ,
+	OP_OR,
+	OP_DIV,
+	OP_REM,
+	OP_BASE,
+
 	OP_PRINT_VAL = 0x40,/**< Enum for printing the plaintext output of a gate */
 	OP_ASSERT = 0x41, /**< Enum for checking the plaintext output of a gate to a reference value */
 	OP_COMBINE = 0x80, /**< Enum for COMBINING multiple single-value gates into one multi-gate */
