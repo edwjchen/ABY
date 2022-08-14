@@ -378,6 +378,7 @@ void process_instruction(
 
 					if (t_wire == f_wire){
 						result = t_wire;
+						(*share_type_cache)[result] = share_type_cache->at(result);
 					} else{
 						// add conversion gates
 						std::string t_share_type = share_type_cache->at(t_wire);
@@ -387,10 +388,10 @@ void process_instruction(
 						f_wire = add_conv_gate(f_share_type, circuit_type, f_wire, party);
 
 						result = circ->PutMUXGate(t_wire, f_wire, sel);
+						(*share_type_cache)[result] = circuit_type;
 					}
 					
 					(*cache)[output_wires[i]] = {result};
-					(*share_type_cache)[result] = circuit_type;
 				}
 				break;
 			}
@@ -734,6 +735,7 @@ double test_aby_test_circuit(
 	}
 	
 	// add timing code
+	// std::cout << "Start Exec .." << std::endl;
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
 	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
