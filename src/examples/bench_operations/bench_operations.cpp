@@ -27,7 +27,7 @@
 #include "ezpc.h"
 #include <cstring>
 
-static const uint32_t m_vBitLens[] = {1, 8, 16, 32};
+static const uint32_t m_vBitLens[] = {8, 16, 32};
 
 static const aby_ops_t m_tBenchOps[] = {
 	// base
@@ -97,6 +97,14 @@ static const aby_ops_t m_tBenchOps[] = {
 	// rem
 	{ OP_REM, S_BOOL, "rem_b" },
 	{ OP_REM, S_YAO, "rem_y" },
+
+	// rem
+	{ OP_SHL, S_BOOL, "shl_b" },
+	{ OP_SHL, S_YAO, "shl_y" },
+
+	// rem
+	{ OP_SHR, S_BOOL, "shr_b" },
+	{ OP_SHR, S_YAO, "shr_y" },
 
 	{ OP_A2B, S_ARITH, "a2b" },
 	{ OP_A2Y, S_ARITH, "a2y" },
@@ -457,6 +465,16 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					break;
 				case OP_DIV:
 					shrres = signeddivbl(circ, shrb, shra);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j];
+					break;
+				case OP_SHL:
+					shrres = left_shift(circ, shra, bitlen - 1);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j];
+					break;
+				case OP_SHR:
+					shrres = logical_right_shift(circ, shra, bitlen - 1);
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j];
 					break;

@@ -175,6 +175,8 @@ enum e_operation {
 	OP_DIV,
 	OP_REM,
 	OP_BASE,
+	OP_SHL,
+	OP_SHR,
 
 	OP_PRINT_VAL = 0x40,/**< Enum for printing the plaintext output of a gate */
 	OP_ASSERT = 0x41, /**< Enum for checking the plaintext output of a gate to a reference value */
