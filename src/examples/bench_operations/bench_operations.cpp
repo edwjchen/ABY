@@ -603,8 +603,8 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 				}
 
 
-				// op_time += party->GetTiming(P_ONLINE) + party->GetTiming(P_SETUP);
-				op_time += party->GetTiming(P_ONLINE);
+				op_time += party->GetTiming(P_ONLINE) + party->GetTiming(P_SETUP);
+				// op_time += party->GetTiming(P_ONLINE);
 				o_time += party->GetTiming(P_ONLINE);
 				s_time += party->GetTiming(P_SETUP);
 				o_comm += party->GetSentData(P_ONLINE)+party->GetReceivedData(P_ONLINE);
