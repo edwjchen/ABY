@@ -27,7 +27,7 @@
 #include "ezpc.h"
 #include <cstring>
 
-static const uint32_t m_vBitLens[] = {8, 16, 32};
+static const uint32_t m_vBitLens[] = {1, 8, 16, 32};
 
 static const aby_ops_t m_tBenchOps[] = {
 	// base
@@ -469,15 +469,29 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 						verifyvec[j] = avec[j];
 					break;
 				case OP_SHL:
-					shrres = left_shift(circ, shra, bitlen - 1);
-					for (uint32_t j = 0; j < nvals; j++)
-						verifyvec[j] = avec[j];
-					break;
+					if (bitlen == 1){
+						shrres = shra;
+						for (uint32_t j = 0; j < nvals; j++)
+							verifyvec[j] = avec[j];
+						break;
+					} else{
+						shrres = left_shift(circ, shra, bitlen - 1);
+						for (uint32_t j = 0; j < nvals; j++)
+							verifyvec[j] = avec[j];
+						break;
+					}
 				case OP_SHR:
-					shrres = logical_right_shift(circ, shra, bitlen - 1);
-					for (uint32_t j = 0; j < nvals; j++)
-						verifyvec[j] = avec[j];
-					break;
+					if (bitlen == 1){
+						shrres = shra;
+						for (uint32_t j = 0; j < nvals; j++)
+							verifyvec[j] = avec[j];
+						break;
+					} else{
+						shrres = logical_right_shift(circ, shra, bitlen - 1);
+						for (uint32_t j = 0; j < nvals; j++)
+							verifyvec[j] = avec[j];
+						break;
+					}
 				case OP_MUX:
 					shrsel = new boolshare(1, circ);
 					shrsel->set_wire_id(0, circ->PutXORGate(shra->get_wire_ids_as_share(0), shrb->get_wire_ids_as_share(0))->get_wire_id(0));
