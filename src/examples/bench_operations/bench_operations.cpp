@@ -413,7 +413,9 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 						verifyvec[j] = avec[j] || bvec[j];
 					break;
 				case OP_AND:
-					shrres = circ->PutANDGate(shra, shrb);
+					for (int i = 0; i < 1000; i++){
+						shrres = circ->PutANDGate(shra, shrb);
+					}
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j] & bvec[j];
 					break;
