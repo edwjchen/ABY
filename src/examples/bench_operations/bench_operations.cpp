@@ -27,7 +27,8 @@
 #include "ezpc.h"
 #include <cstring>
 
-#define NUM_ITER 1001
+#define NUM_ITER 5001
+#define NUM_ITER_HARD 501
 
 static const uint32_t m_vBitLens[] = {1, 8, 16, 32};
 
@@ -493,14 +494,14 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					break;
 
 				case OP_REM:
-					for (int i = 0; i < NUM_ITER; i++){
+					for (int i = 0; i < NUM_ITER_HARD; i++){
 						shrres = signedmodbl(circ, shrb, shra);
 					}
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j];
 					break;
 				case OP_DIV:
-					for (int i = 0; i < NUM_ITER; i++){
+					for (int i = 0; i < NUM_ITER_HARD; i++){
 						shrres = signeddivbl(circ, shrb, shra);
 					}
 					for (uint32_t j = 0; j < nvals; j++)
