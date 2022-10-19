@@ -39,87 +39,87 @@ static const aby_ops_t m_tBenchOps[] = {
 	// { OP_BASE, S_YAO, "base_y" },
 
 	// add
-	{ OP_ADD, S_ARITH, "add_a" },
-	{ OP_ADD, S_BOOL, "add_b" },
-	{ OP_ADD, S_YAO, "add_y" },
+	// { OP_ADD, S_ARITH, "add_a" },
+	// { OP_ADD, S_BOOL, "add_b" },
+	// { OP_ADD, S_YAO, "add_y" },
 
 	// and
 	{ OP_AND, S_BOOL, "and_b" },
 	{ OP_AND, S_YAO, "and_y" },
 
-	// eq
-	{ OP_EQ, S_BOOL, "eq_b" },
-	{ OP_EQ, S_YAO, "eq_y" },
+	// // eq
+	// { OP_EQ, S_BOOL, "eq_b" },
+	// { OP_EQ, S_YAO, "eq_y" },
 
-	// ge
-	{ OP_GE, S_BOOL, "ge_b" },
-	{ OP_GE, S_YAO, "ge_y" },
+	// // ge
+	// { OP_GE, S_BOOL, "ge_b" },
+	// { OP_GE, S_YAO, "ge_y" },
 
-	// gt
-	{ OP_GT, S_BOOL, "gt_b" },
-	{ OP_GT, S_YAO, "gt_y" },
+	// // gt
+	// { OP_GT, S_BOOL, "gt_b" },
+	// { OP_GT, S_YAO, "gt_y" },
 
-	// le
-	{ OP_LE, S_BOOL, "le_b" },
-	{ OP_LE, S_YAO, "le_y" },
+	// // le
+	// { OP_LE, S_BOOL, "le_b" },
+	// { OP_LE, S_YAO, "le_y" },
 
-	// lt
-	{ OP_LT, S_BOOL, "lt_b" },
-	{ OP_LT, S_YAO, "lt_y" },
+	// // lt
+	// { OP_LT, S_BOOL, "lt_b" },
+	// { OP_LT, S_YAO, "lt_y" },
 
-	// mul
-	{ OP_MUL, S_ARITH, "mul_a" },
-	{ OP_MUL, S_BOOL, "mul_b" },
-	{ OP_MUL, S_YAO, "mul_y" },
+	// // mul
+	// { OP_MUL, S_ARITH, "mul_a" },
+	// { OP_MUL, S_BOOL, "mul_b" },
+	// { OP_MUL, S_YAO, "mul_y" },
 
-	// mux
-	{ OP_MUX, S_BOOL, "mux_b" },
-	{ OP_MUX, S_YAO, "mux_y" },
+	// // mux
+	// { OP_MUX, S_BOOL, "mux_b" },
+	// { OP_MUX, S_YAO, "mux_y" },
 
-	// ne
-	{ OP_NEQ, S_BOOL, "ne_b" },
-	{ OP_NEQ, S_YAO, "ne_y" },
+	// // ne
+	// { OP_NEQ, S_BOOL, "ne_b" },
+	// { OP_NEQ, S_YAO, "ne_y" },
 
-	// or
-	{ OP_OR, S_BOOL, "or_b" },
-	{ OP_OR, S_YAO, "or_y" },
+	// // or
+	// { OP_OR, S_BOOL, "or_b" },
+	// { OP_OR, S_YAO, "or_y" },
 
-	// xor
+	// // xor
 	{ OP_XOR, S_BOOL, "xor_b" },
 	{ OP_XOR, S_YAO, "xor_y" },
 
-	// sub
-	{ OP_SUB, S_ARITH, "sub_a" },
-	{ OP_SUB, S_BOOL, "sub_b" },
-	{ OP_SUB, S_YAO, "sub_y" },
+	// // sub
+	// { OP_SUB, S_ARITH, "sub_a" },
+	// { OP_SUB, S_BOOL, "sub_b" },
+	// { OP_SUB, S_YAO, "sub_y" },
 
-	// div
-	{ OP_DIV, S_BOOL, "div_b" },
-	{ OP_DIV, S_YAO, "div_y" },
+	// // div
+	// { OP_DIV, S_BOOL, "div_b" },
+	// { OP_DIV, S_YAO, "div_y" },
 
-	// rem
-	{ OP_REM, S_BOOL, "rem_b" },
-	{ OP_REM, S_YAO, "rem_y" },
+	// // rem
+	// { OP_REM, S_BOOL, "rem_b" },
+	// { OP_REM, S_YAO, "rem_y" },
 
-	// rem
-	{ OP_SHL, S_BOOL, "shl_b" },
-	{ OP_SHL, S_YAO, "shl_y" },
+	// // rem
+	// { OP_SHL, S_BOOL, "shl_b" },
+	// { OP_SHL, S_YAO, "shl_y" },
 
-	// rem
-	{ OP_SHR, S_BOOL, "shr_b" },
-	{ OP_SHR, S_YAO, "shr_y" },
+	// // rem
+	// { OP_SHR, S_BOOL, "shr_b" },
+	// { OP_SHR, S_YAO, "shr_y" },
 
-	{ OP_A2B, S_ARITH, "a2b" },
-	{ OP_A2Y, S_ARITH, "a2y" },
+	// { OP_A2B, S_ARITH, "a2b" },
+	// { OP_A2Y, S_ARITH, "a2y" },
 	
-	{ OP_B2A, S_BOOL, "b2a" },
-	{ OP_B2Y, S_BOOL, "b2y" },
+	// { OP_B2A, S_BOOL, "b2a" },
+	// { OP_B2Y, S_BOOL, "b2y" },
 
-	{ OP_Y2A, S_YAO, "y2a" },
-	{ OP_Y2B, S_YAO, "y2b" },
+	// { OP_Y2A, S_YAO, "y2a" },
+	// { OP_Y2B, S_YAO, "y2b" },
 
-	{ OP_INV, S_BOOL, "inv_b" },
-	{ OP_INV, S_YAO, "inv_y" },
+	// { OP_INV, S_BOOL, "inv_b" },
+	// { OP_INV, S_YAO, "inv_y" },
 
 	// { OP_ADD, S_BOOL, "adddovecbool" },
 	// { OP_ADD, S_BOOL, "addsobool" },
@@ -417,7 +417,7 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 				case OP_XOR:
 					shrres = shra;
 					for (int i = 0; i < NUM_ITER; i++){
-						shrres = circ->PutXORGate(shra, shrb);
+						shrres = circ->PutXORGate(shrres, shrb);
 					}
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j] ^ bvec[j];
@@ -433,7 +433,7 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 				case OP_AND:
 				    shrres = shra;
 					for (int i = 0; i < NUM_ITER; i++){
-						shrres = circ->PutANDGate(shra, shrb);
+						shrres = circ->PutANDGate(shrres, shrb);
 					}
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = avec[j] & bvec[j];
