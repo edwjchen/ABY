@@ -114,7 +114,7 @@ int32_t test_min_eucliden_dist_circuit(e_role role, const std::string& address, 
 		verify = verify_min_euclidean_dist(serverdb, clientquery, dbsize, dim);
 		std::cout << "Verification result = " << verify << std::endl;
 	}
-	//PrintTimings();
+	PrintTimings();
 
 	//TODO free
 	for(uint32_t i = 0; i < dbsize; i++) {
