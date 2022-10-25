@@ -108,7 +108,7 @@ std::unordered_map<std::string, uint32_t> parse_mpc_inputs(std::string test_path
         } else if (line.size() > 2) {
             // Input arrays 
             for (int i = 1; i < line.size(); i++) {
-                std::string key = line[0] + "_" + std::to_string(i-1);
+                std::string key = line[0] + "." + std::to_string(i-1);
                 uint32_t value = (uint32_t)std::stoi(line[i]);
                 map[key] = value;
             }
