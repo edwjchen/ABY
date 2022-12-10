@@ -7,6 +7,106 @@
 
 #include <regex>
 #include <deque>
+#include <vector>
+#include <stdexcept>
+
+template<typename T>
+struct IteratorRange
+{
+  using iterator = T;
+  using value_type = typename std::iterator_traits<T>::value_type;
+  using reference = typename std::iterator_traits<T>::reference;
+
+  IteratorRange() :
+    b{},
+    e{} {}
+
+  IteratorRange(iterator begin, iterator end) :
+    b{begin},
+    e{end} {}
+
+  bool empty() const { return b == e; }
+  size_t size() const { return e - b; }
+
+  reference front() { assert(!empty()); return *b; }
+  reference back() { assert(!empty()); return *std::prev(e); }
+  reference operator [] (ptrdiff_t idx) const { return b[idx]; }
+
+  iterator b, e;
+};
+
+template<typename T>
+T begin(IteratorRange<T> const &r)
+{
+  return r.b;
+}
+
+template<typename T>
+T end(IteratorRange<T> const &r)
+{
+  return r.e;
+}
+
+template<typename Range, typename Func>
+typename Range::iterator combine_pairs(Range &range, Func &&func)
+{
+  using std::begin;
+  using std::end;
+
+  auto first = begin(range);
+  auto last = end(range);
+  if(first == last)
+    return last;
+
+  auto insert_pos = first;
+  auto second = std::next(first);
+  while(second != last)
+  {
+    *insert_pos = func(*first, *second);
+    ++insert_pos;
+
+    if(++second != last)
+      ++second;
+
+    std::advance(first, 2);
+  }
+
+  if(first != last)
+  {
+    *insert_pos = *first;
+    ++insert_pos;
+  }
+
+  return insert_pos;
+}
+
+template<typename Range, typename Func>
+typename Range::value_type& build_tree(Range &range, Func &&func)
+{
+  using ValueType = typename Range::value_type;
+  using ItRange = IteratorRange<typename Range::iterator>;
+
+  using std::begin;
+  using std::end;
+
+  if(range.empty())
+    throw std::runtime_error{"build_tree(): range is empty"};
+
+  ItRange sub_range{begin(range), end(range)};
+  auto second = std::next(begin(range));
+  int level = 0;
+  while(second != sub_range.e)
+  {
+    sub_range.e = combine_pairs(sub_range, [&](ValueType const &a, ValueType const &b)
+    {
+      return func(a, b, level);
+    });
+
+    level++;
+  }
+
+  return *sub_range.b;
+}
 
 using namespace std::chrono;
 
@@ -445,17 +545,45 @@ void process_instruction(
 
 				index_wire = add_conv_gate(share_type_cache->at(index_wire), circuit_type, index_wire, party);
 
-				// Set result to be the first element in the array
-				share* res = cache->at(input_wires[0])[0]; 
+				// // Set result to be the first element in the array
+				// share* res = cache->at(input_wires[0])[0]; 
 
-				// iterate through all input wires
-				for (int i = 0; i < input_wires.size() - 1; i++) {
-					share* ind = put_cons32_gate(circ, i);
-					share* sel = circ->PutEQGate(ind, index_wire);
-					auto array_wire = cache->at(input_wires[i])[0];
-					array_wire = add_conv_gate(share_type_cache->at(array_wire), circuit_type, array_wire, party);
-					res = circ->PutMUXGate(array_wire, res, sel);
+				// // iterate through all input wires
+				// for (int i = 0; i < input_wires.size() - 1; i++) {
+				// 	share* ind = put_cons32_gate(circ, i);
+				// 	share* sel = circ->PutEQGate(ind, index_wire);
+				// 	auto array_wire = cache->at(input_wires[i])[0];
+				// 	array_wire = add_conv_gate(share_type_cache->at(array_wire), circuit_type, array_wire, party);
+				// 	res = circ->PutMUXGate(array_wire, res, sel);
+				// }
+
+				// create columns 
+				std::vector<std::vector<share*>> columns;
+				for (int i = 0; i < input_wires.size()-1; i++) {
+					std::vector<share*> cols; 
+					share* wire = cache->at(input_wires[i])[0];
+					for (int w = 0; w < wire->get_bitlength(); w++) {
+						cols.push_back(wire->get_wire_ids_as_share(w));
+					}
 				}
+
+				std::vector<uint32_t> outputs;
+				for (int i = 0; i < columns.size(); i++) {
+					auto inputs = columns[i];
+					share* selected = build_tree(inputs, [&](share* a, share* b, int level) {
+						return circ->PutMUXGate(a, b, index_wire->get_wire_ids_as_share(level));
+					});
+					outputs.push_back(selected->get_wire_id(0));
+				}
+				share* res = new boolshare(outputs.size(), circ);
+				res->set_wire_ids(outputs);
+
+				// auto inputs = columns[i];
+				// literalt selected = build_tree(inputs, [&](literalt a, literalt b, int level)
+				// {
+				// return prop.lselect(selector.at(level), b, a);
+				// });
+
 				assert(("more than one output wire", output_wires.size() == 1));
 				(*cache)[output_wires[0]] = {res};
 				(*share_type_cache)[res] = circuit_type;
