@@ -419,6 +419,9 @@ void process_instruction(
 			case CONS_: {
 				int value = std::stoi(input_wires[0]);
 				int len = std::stoi(input_wires[1]);
+				if (circuit_type == "y") {
+					circuit_type = "b";
+				}
 				if (circuit_type == "a") {
 					if (len == 1) {
 						result = put_cons1_gate(acirc, value);
@@ -558,25 +561,30 @@ void process_instruction(
 				// }
 
 				// create columns 
-				std::vector<std::vector<share*>> columns;
-				for (int i = 0; i < input_wires.size()-1; i++) {
-					std::vector<share*> cols; 
-					share* wire = cache->at(input_wires[i])[0];
-					for (int w = 0; w < wire->get_bitlength(); w++) {
-						cols.push_back(wire->get_wire_ids_as_share(w));
-					}
-				}
+                std::vector<std::vector<share*>> columns;
+                for (int i = 0; i < 32; i++) {
+                    std::vector<share*> cols;
+                    columns.push_back(cols);
+                }
 
-				std::vector<uint32_t> outputs;
-				for (int i = 0; i < columns.size(); i++) {
-					auto inputs = columns[i];
-					share* selected = build_tree(inputs, [&](share* a, share* b, int level) {
-						return circ->PutMUXGate(a, b, index_wire->get_wire_ids_as_share(level));
-					});
-					outputs.push_back(selected->get_wire_id(0));
-				}
-				share* res = new boolshare(outputs.size(), circ);
-				res->set_wire_ids(outputs);
+                for (int i = 0; i < input_wires.size()-1; i++) {
+                    share* wire = cache->at(input_wires[i])[0];
+                    for (int w = 0; w < wire->get_bitlength(); w++) {
+                        columns[w].push_back(wire->get_wire_ids_as_share(w));
+                    }
+                }
+
+                std::vector<uint32_t> outputs;
+                for (int i = 0; i < columns.size(); i++) {
+                    auto inputs = columns[i];
+                    share* selected = build_tree(inputs, [&](share* a, share* b, int level) {
+                        share* level_wire = index_wire->get_wire_ids_as_share(level);
+                        return circ->PutXORGate(a, circ->PutANDGate(level_wire, circ->PutXORGate(a,b)));
+                    });
+                    outputs.push_back(selected->get_wire_id(0));
+                }
+                share* res = new boolshare(outputs.size(), circ);
+                res->set_wire_ids(outputs);
 
 				// auto inputs = columns[i];
 				// literalt selected = build_tree(inputs, [&](literalt a, literalt b, int level)
@@ -863,7 +871,7 @@ double test_aby_test_circuit(
 	}
 	
 	// add timing code
-	// std::cout << "Start Exec .." << std::endl;
+	std::cout << "Start Exec .." << std::endl;
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
 	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
