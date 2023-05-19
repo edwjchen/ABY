@@ -419,9 +419,6 @@ void process_instruction(
 			case CONS_: {
 				int value = std::stoi(input_wires[0]);
 				int len = std::stoi(input_wires[1]);
-				if (circuit_type == "y") {
-					circuit_type = "b";
-				}
 				if (circuit_type == "a") {
 					if (len == 1) {
 						result = put_cons1_gate(acirc, value);
@@ -871,7 +868,6 @@ double test_aby_test_circuit(
 	}
 	
 	// add timing code
-	std::cout << "Start Exec .." << std::endl;
 	high_resolution_clock::time_point start_exec_time = high_resolution_clock::now();
 	party->ExecCircuit();
 	high_resolution_clock::time_point end_exec_time = high_resolution_clock::now();
