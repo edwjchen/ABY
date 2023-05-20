@@ -4,11 +4,11 @@
 #include "common/aby_interpreter.h"
 
 #include "argparse.hpp"
+#include "util.h"
 
 #include <filesystem>
 #include <string>
 #include <regex>
-
 
 using namespace std::chrono;
 
@@ -16,44 +16,27 @@ enum mode {
     mpc
 };
 
+/** Cast string mode into mode enum
+*
+* @param m string mode
+*
+* @return mode enum
+*/
 mode hash_mode(std::string m) {
     if (m == "mpc") return mpc;
     throw std::invalid_argument("Unknown mode: "+m);
 }
 
-std::vector<std::string> split(std::string str, std::string delimiter) {
-    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
-    std::string token;
-    std::vector<std::string> res;
-
-    while ((pos_end = str.find (delimiter, pos_start)) != std::string::npos) {
-        token = str.substr (pos_start, pos_end - pos_start);
-        pos_start = pos_end + delim_len;
-        if (token.length() > 0) {
-            res.push_back(token);
-        }
-    }
-    
-    token = str.substr(pos_start);
-    if (token.length() > 0) {
-        res.push_back(token);
-    }
-    return res;
-}
-
-std::string get_path(std::string path, std::string suffix) {
-    auto path_list = split(path, "/");
-    auto filename = path_list[path_list.size() - 1];
-    path = path + "/" + filename + suffix;
-    return path;
-}
-
+/** Get bytecode paths for each function
+*
+* @param path base path 
+*
+* @return map of function to bytecode path 
+*/
 std::unordered_map<std::string, std::string> get_bytecode_paths(std::string path) {
     std::unordered_map<std::string, std::string> map;
-
     auto path_list = split(path, "/");
     auto dirname = path_list[path_list.size() - 1];
-
     for (const auto & entry : std::filesystem::directory_iterator(path)) {
         std::string file_path{entry.path().u8string()};
         if (file_path.find("share_map.txt") != std::string::npos) {
@@ -62,19 +45,21 @@ std::unordered_map<std::string, std::string> get_bytecode_paths(std::string path
         auto file_path_list = split(file_path, "/");
         auto filename = file_path_list[file_path_list.size() - 1];
         auto function_name = std::regex_replace(std::regex_replace(filename, std::regex(dirname+"_"), ""), std::regex("_bytecode.txt"), ""); 
-
         map[function_name] =  file_path;
     }
-
     return map;
 }
 
-
+/** Get assignment paths for each function
+*
+* @param share_map_path base path 
+*
+* @return map of function to assignment path
+*/
 std::unordered_map<std::string, std::string> parse_share_map_file(std::string share_map_path) {
     std::ifstream file(share_map_path);
     assert(("Mapping file exists.", file.is_open()));
     if (!file.is_open()) throw std::runtime_error("Share map file doesn't exist. -- "+share_map_path);
-
     std::unordered_map<std::string, std::string> share_map;
     std::string str;
     bool role_flag = false;
@@ -88,6 +73,12 @@ std::unordered_map<std::string, std::string> parse_share_map_file(std::string sh
     return share_map;
 }
 
+/** Get inputs 
+*
+* @param test_path test case path 
+*
+* @return map of input variables to test inputs
+*/
 std::unordered_map<std::string, uint32_t> parse_mpc_inputs(std::string test_path) {
     std::ifstream file(test_path);
     assert(("Test file exists.", file.is_open()));
@@ -99,7 +90,6 @@ std::unordered_map<std::string, uint32_t> parse_mpc_inputs(std::string test_path
         std::vector<std::string> line = split(str, " ");
         std::string key_ = line[0];
         if (key_ == "res") continue;
-
         if (line.size() == 2) {
             std::string key = line[0];
             uint32_t value = (uint32_t)std::stoi(line[1]);
@@ -120,12 +110,14 @@ int main(int argc, char** argv) {
     // add timing code
 	high_resolution_clock::time_point start_total_time = high_resolution_clock::now();
 
+    // initial parameters 
 	e_role role; 
 	uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
 	int32_t test_op = -1;
 	e_mt_gen_alg mt_alg = MT_OT;
 	seclvl seclvl = get_sec_lvl(secparam);
 
+    // parse cmdline args 
     argparse::ArgumentParser program("aby_interpreter");
     program.add_argument("-m", "--mode").required().help("Mode for parsing test inputs");
     program.add_argument("-r", "--role").required().help("Role: <Server:0 / Client:1>").scan<'i', int>();
@@ -143,13 +135,17 @@ int main(int argc, char** argv) {
 	std::string address = program.get<std::string>("--address");
     uint16_t port = program.get<int>("--port");
 
+    // initialize param, share_map, and bytecode_paths maps 
 	std::unordered_map<std::string, uint32_t> params;
     std::unordered_map<std::string, std::string> share_map;
     std::unordered_map<std::string, std::string> bytecode_paths;
 
+    // get paths 
     auto share_map_path = get_path(path, "_share_map.txt");
     auto const_path = get_path(path, "_const.txt");
-
+    bytecode_paths = get_bytecode_paths(path);
+    
+    // parse inputs
 	switch(hash_mode(m)) {
         case mpc: {
             params = parse_mpc_inputs(test_path);
@@ -158,8 +154,7 @@ int main(int argc, char** argv) {
         break;
     }
 
-    bytecode_paths = get_bytecode_paths(path);
-
+    // interpret circuit
 	double exec_time = interpret_circuit(&bytecode_paths, const_path, &params, &share_map, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
 
