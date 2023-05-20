@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
 
     bytecode_paths = get_bytecode_paths(path);
 
-	double exec_time = test_aby_test_circuit(&bytecode_paths, const_path, &params, &share_map, role, address, port, seclvl, 32,
+	double exec_time = interpret_circuit(&bytecode_paths, const_path, &params, &share_map, role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_BOOL);
 
     // add timing code

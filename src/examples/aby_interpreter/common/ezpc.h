@@ -255,7 +255,7 @@ share* c_or(Circuit* c, share* a, share* b){
 }
 
 // A fast mult
-share* constMult(Circuit* c, share* x, uint32_t y){
+share* const_mult(Circuit* c, share* x, uint32_t y){
   uint32_t width = x->get_bitlength();
 
   vector<share*> bvx;
@@ -317,7 +317,7 @@ share* constMult(Circuit* c, share* x, uint32_t y){
 }
 
 // A fast long division algo from HyCC
-share* fastLongDivision(Circuit* c, share* x, share* y, uint32_t getQuotient){
+share* fast_long_division(Circuit* c, share* x, share* y, uint32_t getQuotient){
   uint32_t width = x->get_bitlength();
 
   // share* rem = new boolshare(width, c);
@@ -437,7 +437,7 @@ share* cond_negate(Circuit* c, share* x, share* cond){
 
 
 share* unsigneddivbl(Circuit* c, share* x, share* y){
-  share* __tac_var54 = fastLongDivision(c, x, y, 1);
+  share* __tac_var54 = fast_long_division(c, x, y, 1);
   return __tac_var54;
 }
 
@@ -456,7 +456,7 @@ share* signeddivbl(Circuit* c, share* x, share* y){
   share* unsignedX = cond_negate(c, x, isXNeg);
   share* unsignedY = cond_negate(c, y, isYNeg);
 
-  share* unsigned_res = fastLongDivision(c, unsignedX, unsignedY, 1);
+  share* unsigned_res = fast_long_division(c, unsignedX, unsignedY, 1);
 
   share* isResNeg = c->PutXORGate(isXNeg, isYNeg);
   return cond_negate(c, unsigned_res, isResNeg);
@@ -486,7 +486,7 @@ share* signeddival(Circuit* c, share* x, share* y){
 }
 
 share* unsignedmodbl(Circuit* c, share* x, share* y){
-  share* __tac_var66 = fastLongDivision(c, x, y, 0);
+  share* __tac_var66 = fast_long_division(c, x, y, 0);
   return __tac_var66;
 }
 
@@ -505,7 +505,7 @@ share* signedmodbl(Circuit* c, share* x, share* y){
   share* unsignedX = cond_negate(c, x, isXNeg);
   share* unsignedY = cond_negate(c, y, isYNeg);
 
-  share* unsigned_res = fastLongDivision(c, unsignedX, unsignedY, 0);
+  share* unsigned_res = fast_long_division(c, unsignedX, unsignedY, 0);
 
   return cond_negate(c, unsigned_res, isXNeg);
   // share* __tac_var68 = put_cons32_gate(c,  (int32_t)0);
